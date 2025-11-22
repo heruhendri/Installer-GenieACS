@@ -10,8 +10,11 @@ Script ini digunakan untuk **menginstall GenieACS lengkap** pada **VPS / NATVPS 
 * Service systemd
 * Port default GenieACS
 * Otomatis berjalan saat boot
-
 ---
+
+### Screnshoot Dashboard GenieACS
+---
+![Screnshoot Dashboard](https://)
 
 ## 🚀 Cara Instalasi (Installer 1 maupun 2 sama saja hanya beda tampilan saat instalasi )
 

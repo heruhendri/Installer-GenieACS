@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "=== INSTALLER GENIEACS FOR NATVPS (TR-069) ==="
+echo "=== INSTALLER GENIEACS FOR NATVPS (TR-069) By Hendri ==="
 sleep 1
 
 # ---------------------------------------------------------------------
