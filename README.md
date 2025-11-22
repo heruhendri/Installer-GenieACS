@@ -14,7 +14,7 @@ Script ini digunakan untuk **menginstall GenieACS lengkap** pada **VPS / NATVPS 
 
 ### Screnshoot Dashboard GenieACS
 ---
-![Screnshoot Dashboard](https://)
+![Screnshoot Dashboard](https://github.com/heruhendri/Installer-GenieACS/blob/main/ss.png)
 
 ## 🚀 Cara Instalasi (Installer 1 maupun 2 sama saja hanya beda tampilan saat instalasi )
 
