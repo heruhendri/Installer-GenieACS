@@ -41,16 +41,16 @@ chmod +x install-genieacs2.sh
 | CWMP     | 7547  |
 | NBI      | 7557  |
 | FS       | 7567  |
-| UI       | 10000 |
+| UI       | 3000 |
 
-Untuk NATVPS, port **10000** wajib di-port-forward dari panel.
+Untuk NATVPS, port **3000** wajib di-port-forward dari panel.
 
 ---
 
 ## 🔧 Akses GenieACS UI
 
 ```
-http://IP-VPS:10000
+http://IP-VPS:3000
 ```
 
 ---
@@ -82,6 +82,6 @@ systemctl daemon-reload
 Setelah upload ke GitHub, format link raw:
 
 ```
-https://raw.githubusercontent.com/heruhendri/<repo>/main/installer.sh
+https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/installer.sh
 ```
 
