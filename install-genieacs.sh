@@ -56,7 +56,7 @@ GENIEACS_FS_HOST=0.0.0.0
 GENIEACS_FS_PORT=7567
 
 GENIEACS_UI_HOST=0.0.0.0
-GENIEACS_UI_PORT=10000
+GENIEACS_UI_PORT=3000
 
 GENIEACS_UI_JWT_SECRET=$(openssl rand -hex 32)
 GENIEACS_EXT_DIR=/opt/genieacs/ext
@@ -133,7 +133,7 @@ systemctl enable --now genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
 ufw allow 7547/tcp
 ufw allow 7557/tcp
 ufw allow 7567/tcp
-ufw allow 10000/tcp
+ufw allow 3000/tcp
 
 # ---------------------------------------------------------------------
 # INSTALL COMPLETE
@@ -144,12 +144,12 @@ echo ""
 echo "============================================================"
 echo " 🎉 INSTALL GENIEACS BERHASIL"
 echo "------------------------------------------------------------"
-echo " 🌐 GUI URL  : http://$IP:10000"
+echo " 🌐 GUI URL  : http://$IP:3000"
 echo " 📡 CWMP URL : http://$IP:7547"
 echo " 📁 FS URL   : http://$IP:7567"
 echo " 🔑 JWT key  : disimpan di /opt/genieacs/genieacs.env"
 echo "------------------------------------------------------------"
 echo " Jalankan di NAT VPS:"
-echo "  - Forward port 10000 → 10000"
+echo "  - Forward port 3000 → 10000"
 echo "  - Forward port 7547 → 7547"
 echo "============================================================"
