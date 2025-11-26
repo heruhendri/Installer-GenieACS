@@ -20,11 +20,14 @@ curl -sL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs
 
 # ---------------------------------------------------------------------
-# INSTALL MONGODB 5.0 (Compatibility for Ubuntu 20–24)
+# INSTALL MONGODB 6.0 (Fix for libssl)
 # ---------------------------------------------------------------------
-wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add -
-echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" \
-    | tee /etc/apt/sources.list.d/mongodb-org-5.0.list
+curl -fsSL https://pgp.mongodb.com/server-6.0.asc | \
+    gpg -o /usr/share/keyrings/mongodb-server-6.0.gpg --dearmor
+
+echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg ] \
+https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/6.0 multiverse" \
+    > /etc/apt/sources.list.d/mongodb-org-6.0.list
 
 apt update
 apt install -y mongodb-org
