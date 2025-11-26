@@ -21,14 +21,14 @@ Script ini digunakan untuk **menginstall GenieACS lengkap** pada **VPS / NATVPS 
 ### 1. Download dan jalankan installer 1
 
 ```bash
-wget https://raw.githubusercontent.com/heruhendri/REPO/main/install-genieacs.sh
+wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs.sh
 chmod +x install-genieacs.sh
 ./install-genieacs.sh
 ```
 
 ### 2. Download dan jalankan installer 2
 ```bash
-wget https://raw.githubusercontent.com/heruhendri/REPO/main/install-genieacs2.sh
+wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs2.sh
 chmod +x install-genieacs2.sh
 ./install-genieacs.sh
 ```
