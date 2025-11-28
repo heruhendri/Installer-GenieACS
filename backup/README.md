@@ -78,7 +78,7 @@ Untuk efisiensi, Anda dapat menggabungkan langkah-langkah di atas ke dalam satu 
 
 Saya membuatkan skrip ini untuk Anda:
 
-http://googleusercontent.com/immersive_entry_chip/0
+https://github.com/heruhendri/Installer-GenieACS/blob/main/backup/auto-backup.sh
 
 ### Langkah Penggunaan Skrip
 
