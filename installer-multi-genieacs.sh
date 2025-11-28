@@ -1,178 +1,255 @@
 #!/bin/bash
-clear
-echo "============================================"
-echo " GENIEACS MULTI INSTANCE INSTALLER FINAL"
-echo "============================================"
+
+# ==========================================================
+# MULTI-INSTANCE GENIEACS INSTALLER FOR NAT VPS
+# Modified by Gemini
+# Original Logic by Hendri
+# ==========================================================
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}=== MULTI-INSTANCE GENIEACS INSTALLER ===${NC}"
+echo -e "${YELLOW}Script ini memungkinkan Anda menginstall banyak GenieACS dalam satu VPS.${NC}"
+sleep 1
+
+# ---------------------------------------------------------------------
+# 1. INPUT CONFIGURATION
+# ---------------------------------------------------------------------
 echo ""
+echo -e "${YELLOW}[ INPUT KONFIGURASI INSTANCE ]${NC}"
+read -p "Masukkan Nama Instance (misal: client1, vps2): " INSTANCE_NAME
 
-read -p "Masukkan nama instance (tanpa spasi, contoh: isp1): " INSTANCE
-
-if [ -z "$INSTANCE" ]; then
-    echo "ERROR: Nama instance tidak boleh kosong!"
+if [[ -z "$INSTANCE_NAME" ]]; then
+    echo -e "${RED}Error: Nama Instance tidak boleh kosong!${NC}"
     exit 1
 fi
 
-BASE_PORT=3000
+# Cek apakah folder instance sudah ada
+if [ -d "/opt/genieacs-${INSTANCE_NAME}" ]; then
+    echo -e "${RED}Error: Instance dengan nama '${INSTANCE_NAME}' sudah ada!${NC}"
+    exit 1
+fi
 
-# Hitung port berdasarkan jumlah instance yang ada
-INDEX=$(ls /opt | grep "genieacs-" | wc -l)
-UI_PORT=$((BASE_PORT + (INDEX * 100)))
-CWMP_PORT=$((7547 + INDEX))
-NBI_PORT=$((7557 + INDEX))
-FS_PORT=$((7567 + INDEX))
+echo -e "Masukkan Port untuk Instance '${INSTANCE_NAME}' (Tekan Enter untuk default)"
+read -p "UI Port (Default 3000): " PORT_UI
+PORT_UI=${PORT_UI:-3000}
 
-DB_NAME="genieacs_${INSTANCE}"
-INSTALL_DIR="/opt/genieacs-${INSTANCE}"
+read -p "CWMP Port (Default 7547): " PORT_CWMP
+PORT_CWMP=${PORT_CWMP:-7547}
+
+read -p "NBI Port (Default 7557): " PORT_NBI
+PORT_NBI=${PORT_NBI:-7557}
+
+read -p "FS Port (Default 7567): " PORT_FS
+PORT_FS=${PORT_FS:-7567}
 
 echo ""
-echo "Instance Details:"
-echo "---------------------------------------------"
-echo " Instance Name : $INSTANCE"
-echo " UI Port       : $UI_PORT"
-echo " CWMP Port     : $CWMP_PORT"
-echo " NBI Port      : $NBI_PORT"
-echo " FS Port       : $FS_PORT"
-echo " Database Name : $DB_NAME"
-echo " Install Path  : $INSTALL_DIR"
-echo "---------------------------------------------"
+echo -e "${GREEN}Ringkasan Instalasi:${NC}"
+echo "Instance : $INSTANCE_NAME"
+echo "Database : genieacs-${INSTANCE_NAME}"
+echo "UI Port  : $PORT_UI"
+echo "CWMP Port: $PORT_CWMP"
+echo "NBI Port : $PORT_NBI"
+echo "FS Port  : $PORT_FS"
 echo ""
-read -p "Lanjutkan instalasi? (y/n): " OK
-if [ "$OK" != "y" ]; then
+read -p "Lanjut install? (y/n): " CONFIRM
+if [[ "$CONFIRM" != "y" ]]; then
+    echo "Instalasi dibatalkan."
     exit 0
 fi
 
+# ---------------------------------------------------------------------
+# 2. SYSTEM UPDATE & DEPENDENCIES (SKIP IF INSTALLED)
+# ---------------------------------------------------------------------
 echo ""
-echo "[1/7] Update system & install dependencies"
-apt update -y
-apt install -y git curl build-essential redis-server mongodb nodejs npm
+echo -e "${YELLOW}[ MEMERIKSA DEPENDENCIES ]${NC}"
 
-echo ""
-echo "[2/7] Clone GenieACS"
-git clone https://github.com/genieacs/genieacs.git $INSTALL_DIR
+if ! command -v node &> /dev/null; then
+    echo "Menginstall Node.js & Dependencies..."
+    apt update && apt upgrade -y
+    apt install -y curl wget git gnupg build-essential
+    curl -sL https://deb.nodesource.com/setup_18.x | bash -
+    apt install -y nodejs
+else
+    echo "Node.js sudah terinstall. Skip."
+fi
 
-echo ""
-echo "[3/7] Install dependencies"
-cd $INSTALL_DIR
-npm install
+if ! command -v mongod &> /dev/null; then
+    echo "Menginstall MongoDB 6.0..."
+    curl -fsSL https://pgp.mongodb.com/server-6.0.asc | \
+        gpg -o /usr/share/keyrings/mongodb-server-6.0.gpg --dearmor
 
-echo ""
-echo "[4/7] Membuat database MongoDB instance..."
-mongo <<EOF
-use $DB_NAME
-db.createCollection("devices")
+    echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg ] \
+    https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/6.0 multiverse" \
+        > /etc/apt/sources.list.d/mongodb-org-6.0.list
+
+    apt update
+    apt install -y mongodb-org
+    systemctl enable --now mongod
+else
+    echo "MongoDB sudah terinstall. Skip."
+fi
+
+# Install GenieACS Global Package jika belum ada
+if ! npm list -g genieacs | grep genieacs &> /dev/null; then
+    echo "Menginstall Core GenieACS..."
+    npm install -g genieacs@1.2.13
+else
+    echo "Core GenieACS sudah terinstall. Skip."
+fi
+
+# ---------------------------------------------------------------------
+# 3. SETUP USER & DIRECTORIES
+# ---------------------------------------------------------------------
+# Buat user genieacs jika belum ada
+id -u genieacs &>/dev/null || useradd --system --no-create-home --user-group genieacs
+
+# Folder khusus per instance
+INSTALL_DIR="/opt/genieacs-${INSTANCE_NAME}"
+LOG_DIR="/var/log/genieacs-${INSTANCE_NAME}"
+
+mkdir -p "$INSTALL_DIR/ext"
+mkdir -p "$LOG_DIR"
+
+chown -R genieacs:genieacs "$INSTALL_DIR" "$LOG_DIR"
+chmod 755 "$INSTALL_DIR"
+
+# ---------------------------------------------------------------------
+# 4. CREATE ENV CONFIG (SPECIFIC DB & PORTS)
+# ---------------------------------------------------------------------
+# Kita menambahkan GENIEACS_MONGODB_CONNECTION_URL untuk memisahkan database
+
+cat <<EOF > "$INSTALL_DIR/genieacs.env"
+GENIEACS_CWMP_HOST=0.0.0.0
+GENIEACS_CWMP_PORT=$PORT_CWMP
+
+GENIEACS_NBI_HOST=0.0.0.0
+GENIEACS_NBI_PORT=$PORT_NBI
+
+GENIEACS_FS_HOST=0.0.0.0
+GENIEACS_FS_PORT=$PORT_FS
+
+GENIEACS_UI_HOST=0.0.0.0
+GENIEACS_UI_PORT=$PORT_UI
+
+GENIEACS_MONGODB_CONNECTION_URL=mongodb://127.0.0.1:27017/genieacs-${INSTANCE_NAME}
+
+GENIEACS_UI_JWT_SECRET=$(openssl rand -hex 32)
+GENIEACS_EXT_DIR=$INSTALL_DIR/ext
 EOF
 
-echo "MongoDB database '$DB_NAME' berhasil dibuat!"
+chown genieacs:genieacs "$INSTALL_DIR/genieacs.env"
+chmod 600 "$INSTALL_DIR/genieacs.env"
 
-echo ""
-echo "[5/7] Generate config file"
-mkdir -p /etc/genieacs-$INSTANCE
+# ---------------------------------------------------------------------
+# 5. CREATE SYSTEMD SERVICE FILES (NAMED BY INSTANCE)
+# ---------------------------------------------------------------------
+echo "Membuat Service Systemd untuk $INSTANCE_NAME..."
 
-cat <<EOF >/etc/genieacs-$INSTANCE/config.json
-{
-  "CWMP_PORT": $CWMP_PORT,
-  "NBI_PORT": $NBI_PORT,
-  "FS_PORT": $FS_PORT,
-  "UI_PORT": $UI_PORT,
-  "MONGODB_CONNECTION_URL": "mongodb://localhost:27017/$DB_NAME"
-}
-EOF
-
-echo "Config created: /etc/genieacs-$INSTANCE/config.json"
-
-echo ""
-echo "[6/7] Membuat systemd service"
-
-# CWMP
-cat <<EOF >/etc/systemd/system/genieacs-cwmp-$INSTANCE.service
+# CWMP Service
+cat <<EOF > /etc/systemd/system/genieacs-${INSTANCE_NAME}-cwmp.service
 [Unit]
-Description=GenieACS CWMP ($INSTANCE)
-After=network.target mongodb.service redis.service
+Description=GenieACS CWMP (${INSTANCE_NAME})
+After=network.target
 
 [Service]
-Environment=GENIEACS_CONFIG=/etc/genieacs-$INSTANCE/config.json
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/node dist/bin/genieacs-cwmp.js
-Restart=always
+User=genieacs
+EnvironmentFile=$INSTALL_DIR/genieacs.env
+ExecStart=/usr/bin/genieacs-cwmp
+StandardOutput=append:$LOG_DIR/cwmp.log
+StandardError=append:$LOG_DIR/cwmp-error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# NBI
-cat <<EOF >/etc/systemd/system/genieacs-nbi-$INSTANCE.service
+# NBI Service
+cat <<EOF > /etc/systemd/system/genieacs-${INSTANCE_NAME}-nbi.service
 [Unit]
-Description=GenieACS NBI ($INSTANCE)
-After=network.target mongodb.service redis.service
+Description=GenieACS NBI (${INSTANCE_NAME})
+After=network.target
 
 [Service]
-Environment=GENIEACS_CONFIG=/etc/genieacs-$INSTANCE/config.json
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/node dist/bin/genieacs-nbi.js
-Restart=always
+User=genieacs
+EnvironmentFile=$INSTALL_DIR/genieacs.env
+ExecStart=/usr/bin/genieacs-nbi
+StandardOutput=append:$LOG_DIR/nbi.log
+StandardError=append:$LOG_DIR/nbi-error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# FS
-cat <<EOF >/etc/systemd/system/genieacs-fs-$INSTANCE.service
+# FS Service
+cat <<EOF > /etc/systemd/system/genieacs-${INSTANCE_NAME}-fs.service
 [Unit]
-Description=GenieACS FS ($INSTANCE)
-After=network.target mongodb.service redis.service
+Description=GenieACS File Server (${INSTANCE_NAME})
+After=network.target
 
 [Service]
-Environment=GENIEACS_CONFIG=/etc/genieacs-$INSTANCE/config.json
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/node dist/bin/genieacs-fs.js
-Restart=always
+User=genieacs
+EnvironmentFile=$INSTALL_DIR/genieacs.env
+ExecStart=/usr/bin/genieacs-fs
+StandardOutput=append:$LOG_DIR/fs.log
+StandardError=append:$LOG_DIR/fs-error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# UI
-cat <<EOF >/etc/systemd/system/genieacs-ui-$INSTANCE.service
+# UI Service
+cat <<EOF > /etc/systemd/system/genieacs-${INSTANCE_NAME}-ui.service
 [Unit]
-Description=GenieACS UI ($INSTANCE)
-After=network.target mongodb.service redis.service
+Description=GenieACS UI (${INSTANCE_NAME})
+After=network.target
 
 [Service]
-Environment=GENIEACS_CONFIG=/etc/genieacs-$INSTANCE/config.json
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/node dist/bin/genieacs-ui.js
-Restart=always
+User=genieacs
+EnvironmentFile=$INSTALL_DIR/genieacs.env
+ExecStart=/usr/bin/genieacs-ui
+StandardOutput=append:$LOG_DIR/ui.log
+StandardError=append:$LOG_DIR/ui-error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo ""
-echo "[7/7] Enable & start all services"
+# Reload & Start Services
 systemctl daemon-reload
-systemctl enable genieacs-cwmp-$INSTANCE
-systemctl enable genieacs-nbi-$INSTANCE
-systemctl enable genieacs-fs-$INSTANCE
-systemctl enable genieacs-ui-$INSTANCE
+systemctl enable --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
 
-systemctl start genieacs-cwmp-$INSTANCE
-systemctl start genieacs-nbi-$INSTANCE
-systemctl start genieacs-fs-$INSTANCE
-systemctl start genieacs-ui-$INSTANCE
+# ---------------------------------------------------------------------
+# 6. FIREWALL
+# ---------------------------------------------------------------------
+if command -v ufw &> /dev/null; then
+    ufw allow $PORT_UI/tcp
+    ufw allow $PORT_CWMP/tcp
+    ufw allow $PORT_NBI/tcp
+    ufw allow $PORT_FS/tcp
+fi
+
+# ---------------------------------------------------------------------
+# 7. SUMMARY
+# ---------------------------------------------------------------------
+IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "============================================"
-echo " INSTALLASI SELESAI!"
-echo "============================================"
-echo "Instance Name : $INSTANCE"
+echo "============================================================"
+echo -e " 🎉 INSTALASI GENIEACS INSTANCE: ${GREEN}$INSTANCE_NAME${NC} BERHASIL"
+echo "============================================================"
+echo " 🌐 GUI URL  : http://$IP:$PORT_UI"
+echo " 📡 CWMP URL : http://$IP:$PORT_CWMP"
+echo " 📁 FS URL   : http://$IP:$PORT_FS"
 echo ""
-echo " UI   : http://IP-SERVER:$UI_PORT"
-echo " CWMP : $CWMP_PORT"
-echo " NBI  : $NBI_PORT"
-echo " FS   : $FS_PORT"
-echo " DB   : $DB_NAME (MongoDB)"
-echo ""
-echo "Cek status service:"
-echo "  systemctl status genieacs-ui-$INSTANCE"
-echo ""
-echo "============================================"
+echo " 💾 Config   : $INSTALL_DIR/genieacs.env"
+echo " 📝 Logs     : $LOG_DIR"
+echo " 🗄️  Database : genieacs-${INSTANCE_NAME}"
+echo "============================================================"
+echo " Commands untuk mengelola instance ini:"
+echo " Stop  : systemctl stop genieacs-${INSTANCE_NAME}-*"
+echo " Start : systemctl start genieacs-${INSTANCE_NAME}-*"
+echo "============================================================"
