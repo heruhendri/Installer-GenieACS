@@ -28,9 +28,9 @@ chmod +x install-genieacs.sh
 
 ### 2. Download dan jalankan installer 2
 ```bash
-wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs2.sh
-chmod +x install-genieacs2.sh
-./install-genieacs2.sh
+wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/installer-multi-genieacs.sh
+chmod +x installer-multi-genieacs.sh
+./installer-multi-genieacs.sh
 ```
 ---
 
