@@ -1,168 +1,196 @@
-#!/bin/bash 
+#!/bin/bash
 set -euo pipefail
 
-echo "=== Multi-GenieACS Installer (each instance has own MongoDB) ==="
-echo ""
+# multi-genieacs-mongo-per-instance.sh
+# Run repeatedly to add instances:
+#   ./multi-genieacs-mongo-per-instance.sh
 
-read -p "Masukkan nama instansi (contoh: gacs1): " INST
-if [ -z "$INST" ]; then
-  echo "Nama instansi tidak boleh kosong."; exit 1
+echo "=== MULTI INSTALLER GENIEACS (Mongo per-instance) By Hendri ==="
+sleep 1
+
+read -p "Masukkan nama instance (contoh: gacs1): " INSTANCE
+if [[ -z "$INSTANCE" ]]; then
+  echo "Nama instance tidak boleh kosong."
+  exit 1
 fi
 
-read -p "Masukkan nomor index instansi (1,2,3,...). Dipakai untuk port calc: " IDX
-if ! [[ "$IDX" =~ ^[0-9]+$ ]]; then
-  echo "Index harus angka."; exit 1
+BASE_DIR="/opt/genieacs-$INSTANCE"
+if [ -d "$BASE_DIR" ]; then
+  echo "Instance $INSTANCE sudah ada. Pilih nama lain."
+  exit 1
 fi
 
-# port calculation
-UI_PORT=$((3000 + (IDX - 1) * 100))
-CWMP_PORT=$((7547 + (IDX - 1) * 10))
-NBI_PORT=$((7557 + (IDX - 1) * 10))
-FS_PORT=$((7567 + (IDX - 1) * 10))
-MONGO_PORT=$((27017 + (IDX - 1) * 100))
+# Count existing instances (directories named /opt/genieacs-*)
+COUNT=$(ls -d /opt/genieacs-* 2>/dev/null | wc -l || echo 0)
+# If there are zero matches, wc -l returns 0; good.
+UI_PORT=$((3000 + (COUNT * 100)))
+CWMP_PORT=$((7547 + COUNT))
+NBI_PORT=$((7557 + COUNT))
+FS_PORT=$((7567 + COUNT))
+MONGO_PORT=$((27017 + COUNT))
 
-BASE_DIR="/opt/genieacs-${INST}"
-LOG_DIR="/var/log/genieacs-${INST}"
-ENV_FILE="${BASE_DIR}/genieacs.env"
-MONGO_DBPATH="/var/lib/mongo-${INST}"
-MONGO_CONF="/etc/mongod-${INST}.conf"
-MONGO_SERVICE="/etc/systemd/system/mongod-${INST}.service"
-GENIEACS_USER="genieacs-${INST}"
-
-echo ""
-echo "Instansi: $INST"
-echo "Index: $IDX"
-echo "Ports => UI=$UI_PORT  CWMP=$CWMP_PORT  NBI=$NBI_PORT  FS=$FS_PORT  MONGO=$MONGO_PORT"
+echo "Membuat instance: $INSTANCE"
+echo "Instance index: $COUNT"
+echo "Ports -> UI:$UI_PORT  CWMP:$CWMP_PORT  NBI:$NBI_PORT  FS:$FS_PORT  MONGO:$MONGO_PORT"
 echo ""
 
-read -p "Lanjut install? (y/n): " CONF
-[ "$CONF" != "y" ] && exit 0
-
+# ---------------------------
+# PRE-INSTALL TOOLS
+# ---------------------------
+echo "==> Menginstall prerequisite tools..."
 apt update
-apt install -y curl wget gnupg build-essential ufw
+apt install -y curl wget git gnupg build-essential net-tools ufw jq screen nano iputils-ping openssl || true
 
-# install redis
-if ! command -v redis-server >/dev/null; then
-  apt install -y redis-server
-  systemctl enable --now redis-server
-fi
-
-# install nodejs
-if ! command -v node >/dev/null; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+# ---------------------------
+# NODE.JS 18
+# ---------------------------
+if ! command -v node >/dev/null 2>&1; then
+  echo "==> Installing Node.js 18..."
+  curl -sL https://deb.nodesource.com/setup_18.x | bash -
   apt install -y nodejs
 fi
 
-# install mongodb 7
-if ! command -v mongod >/dev/null; then
-  curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
-    | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-
-  echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] \
-https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/7.0 multiverse" \
-    > /etc/apt/sources.list.d/mongodb-org-7.0.list
-
+# ---------------------------
+# MONGODB REPO + INSTALL (once)
+# ---------------------------
+if ! dpkg -l | grep -q mongodb-org; then
+  echo "==> Menambahkan repo MongoDB..."
+  curl -fsSL https://pgp.mongodb.com/server-6.0.asc | gpg -o /usr/share/keyrings/mongodb-server-6.0.gpg --dearmor
+  echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/6.0 multiverse" \
+    > /etc/apt/sources.list.d/mongodb-org-6.0.list
   apt update
   apt install -y mongodb-org
-  systemctl disable --now mongod || true
 fi
 
-# create user for genieacs
-if ! id "$GENIEACS_USER" >/dev/null 2>&1; then
-  useradd -r -s /bin/false "$GENIEACS_USER"
+# Stop/disable the default single mongod (we will run per-instance mongod services)
+if systemctl list-units --full -all | grep -qE '^mongod\.service'; then
+  echo "==> Menonaktifkan mongod.service bawaan untuk menghindari konflik port..."
+  systemctl stop mongod || true
+  systemctl disable mongod || true
 fi
 
-mkdir -p "$BASE_DIR" "$LOG_DIR" "$BASE_DIR/ext"
+# ---------------------------
+# INSTALL GENIEACS (global, once)
+# ---------------------------
+if ! command -v genieacs-cwmp >/dev/null 2>&1; then
+  echo "==> Installing GenieACS globally..."
+  npm install -g genieacs@1.2.13
+fi
+
+# Ensure genieacs system user exists
+useradd --system --no-create-home --user-group genieacs || true
+
+# ---------------------------
+# SETUP FILES FOR INSTANCE
+# ---------------------------
+echo "==> Membuat direktori instance di $BASE_DIR ..."
+mkdir -p "$BASE_DIR/ext"
+mkdir -p "$BASE_DIR/log"
+chown -R genieacs:genieacs "$BASE_DIR"
+chmod 755 "$BASE_DIR"
+
+# ---------------------------
+# CREATE MONGODB PER-INSTANCE CONFIG
+# ---------------------------
+MONGO_DBPATH="/var/lib/mongo-$INSTANCE"
+MONGO_LOGPATH="/var/log/mongodb/mongod-$INSTANCE.log"
+MONGO_PIDFILE="/var/run/mongodb/mongod-$INSTANCE.pid"
 mkdir -p "$MONGO_DBPATH"
-chown -R "$GENIEACS_USER":"$GENIEACS_USER" "$BASE_DIR" "$LOG_DIR"
-chown -R mongodb:mongodb "$MONGO_DBPATH"
-
-# download genieacs
-TMP_TAR="/tmp/genieacs.tar.gz"
-if [ ! -f "$TMP_TAR" ]; then
-  wget -q -O "$TMP_TAR" \
-    "https://codeload.github.com/genieacs/genieacs/tar.gz/refs/heads/master"
-fi
-
-tar -xzf "$TMP_TAR" -C "$BASE_DIR" --strip 1
-
-cd "$BASE_DIR"
-npm install --production
-
-# ENV FILE
-cat > "$ENV_FILE" <<EOF
-GENIEACS_CWMP_HOST=0.0.0.0
-GENIEACS_CWMP_PORT=${CWMP_PORT}
-GENIEACS_NBI_HOST=0.0.0.0
-GENIEACS_NBI_PORT=${NBI_PORT}
-GENIEACS_FS_HOST=0.0.0.0
-GENIEACS_FS_PORT=${FS_PORT}
-GENIEACS_UI_HOST=0.0.0.0
-GENIEACS_UI_PORT=${UI_PORT}
-GENIEACS_UI_JWT_SECRET=$(openssl rand -hex 32)
-GENIEACS_EXT_DIR=${BASE_DIR}/ext
-GENIEACS_DEBUG_FILE=${LOG_DIR}/debug.yaml
-GENIEACS_MONGODB_CONNECTION_URL=mongodb://127.0.0.1:${MONGO_PORT}/genieacs_${INST}
-EOF
-
-chown "$GENIEACS_USER":"$GENIEACS_USER" "$ENV_FILE"
-chmod 600 "$ENV_FILE"
-
-# === FIX MONGODB CONFIG (RUN AS mongodb USER) ===
 mkdir -p /var/log/mongodb
-touch "/var/log/mongodb/mongod-${INST}.log"
-chown mongodb:mongodb "/var/log/mongodb/mongod-${INST}.log"
+chown -R mongodb:mongodb "$MONGO_DBPATH" /var/log/mongodb
 
-cat > "$MONGO_CONF" <<EOF
+cat <<EOF > "/etc/mongod-$INSTANCE.conf"
+# mongod config for instance $INSTANCE
 storage:
-  dbPath: "${MONGO_DBPATH}"
+  dbPath: $MONGO_DBPATH
   journal:
     enabled: true
 systemLog:
   destination: file
-  path: "/var/log/mongodb/mongod-${INST}.log"
+  path: $MONGO_LOGPATH
   logAppend: true
-net:
-  bindIp: 127.0.0.1
-  port: ${MONGO_PORT}
 processManagement:
-  fork: false
+  pidFilePath: $MONGO_PIDFILE
+net:
+  port: $MONGO_PORT
+  bindIp: 127.0.0.1
+security:
+  authorization: disabled
 EOF
 
-# correct service (RUN AS mongodb)
-cat > "$MONGO_SERVICE" <<EOF
+# Create systemd service for this mongod instance
+cat <<EOF > "/etc/systemd/system/mongodb-$INSTANCE.service"
 [Unit]
-Description=MongoDB for GenieACS ${INST}
+Description=MongoDB per-instance for $INSTANCE
 After=network.target
 
 [Service]
 User=mongodb
 Group=mongodb
-ExecStart=/usr/bin/mongod --config ${MONGO_CONF}
+Environment=TMPDIR=/tmp
+ExecStart=/usr/bin/mongod --config /etc/mongod-$INSTANCE.conf
+PIDFile=$MONGO_PIDFILE
+TimeoutSec=300
 Restart=always
-LimitNOFILE=64000
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now "mongod-${INST}.service"
+systemctl enable --now "mongodb-$INSTANCE.service"
 
-# genieacs services
-for SVC in cwmp nbi fs ui; do
-cat > "/etc/systemd/system/genieacs-${INST}-${SVC}.service" <<EOF
+# Wait shortly for Mongo to come up
+sleep 2
+if ! ss -lnt | grep -q ":$MONGO_PORT"; then
+  echo "Peringatan: MongoDB pada port $MONGO_PORT tidak terlihat aktif. Periksa jurnal: sudo journalctl -u mongodb-$INSTANCE -n 200"
+fi
+
+# ---------------------------
+# CREATE GENIEACS ENV
+# ---------------------------
+GENIEACS_DBNAME="genieacs_${INSTANCE}"
+GENIEACS_MONGO_URL="mongodb://127.0.0.1:$MONGO_PORT/$GENIEACS_DBNAME"
+
+cat <<EOF > "$BASE_DIR/genieacs.env"
+GENIEACS_CWMP_HOST=0.0.0.0
+GENIEACS_CWMP_PORT=$CWMP_PORT
+
+GENIEACS_NBI_HOST=0.0.0.0
+GENIEACS_NBI_PORT=$NBI_PORT
+
+GENIEACS_FS_HOST=0.0.0.0
+GENIEACS_FS_PORT=$FS_PORT
+
+GENIEACS_UI_HOST=0.0.0.0
+GENIEACS_UI_PORT=$UI_PORT
+
+# MongoDB connection string per-instance
+GENIEACS_MONGO_URL=$GENIEACS_MONGO_URL
+
+GENIEACS_UI_JWT_SECRET=$(openssl rand -hex 32)
+GENIEACS_EXT_DIR=$BASE_DIR/ext
+EOF
+
+chown genieacs:genieacs "$BASE_DIR/genieacs.env"
+chmod 600 "$BASE_DIR/genieacs.env"
+
+# ---------------------------
+# CREATE SYSTEMD SERVICES FOR GENIEACS (per-instance)
+# ---------------------------
+SERVICES=(cwmp nbi fs ui)
+for SVC in "${SERVICES[@]}"; do
+  cat <<EOF > "/etc/systemd/system/genieacs-$INSTANCE-$SVC.service"
 [Unit]
-Description=GenieACS ${SVC} (${INST})
-After=network.target mongod-${INST}.service redis-server.service
+Description=GenieACS $SVC ($INSTANCE)
+After=network.target mongodb-$INSTANCE.service
 
 [Service]
-EnvironmentFile=${ENV_FILE}
-User=${GENIEACS_USER}
-ExecStart=/usr/bin/node ${BASE_DIR}/bin/genieacs-${SVC}
-WorkingDirectory=${BASE_DIR}
+User=genieacs
+EnvironmentFile=$BASE_DIR/genieacs.env
+ExecStart=/usr/bin/genieacs-$SVC
+WorkingDirectory=$BASE_DIR
 Restart=always
-LimitNOFILE=64000
 
 [Install]
 WantedBy=multi-user.target
@@ -170,22 +198,40 @@ EOF
 done
 
 systemctl daemon-reload
-systemctl enable --now genieacs-${INST}-cwmp.service \
-                        genieacs-${INST}-nbi.service \
-                        genieacs-${INST}-fs.service \
-                        genieacs-${INST}-ui.service
 
-ufw allow "${UI_PORT}/tcp"
-ufw allow "${CWMP_PORT}/tcp"
-ufw allow "${NBI_PORT}/tcp"
-ufw allow "${FS_PORT}/tcp"
+for SVC in "${SERVICES[@]}"; do
+  systemctl enable --now "genieacs-$INSTANCE-$SVC"
+done
+
+# ---------------------------
+# FIREWALL - hanya buka port yang perlu
+# ---------------------------
+ufw allow "$UI_PORT"/tcp
+ufw allow "$CWMP_PORT"/tcp
+ufw allow "$NBI_PORT"/tcp
+ufw allow "$FS_PORT"/tcp
+
+# ---------------------------
+# FINISH
+# ---------------------------
+IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "=============================================="
-echo "INSTANSI $INST BERHASIL DIPASANG"
-echo "UI : http://$(hostname -I | awk '{print $1}'):${UI_PORT}"
-echo "CWMP : ${CWMP_PORT}"
-echo "NBI : ${NBI_PORT}"
-echo "FS : ${FS_PORT}"
-echo "MongoDB Port : ${MONGO_PORT}"
-echo "=============================================="
+echo "============================================================"
+echo " 🎉 INSTANCE $INSTANCE BERHASIL DIBUAT"
+echo "------------------------------------------------------------"
+echo " 🌐 GUI URL    : http://$IP:$UI_PORT"
+echo " 📡 CWMP URL   : http://$IP:$CWMP_PORT"
+echo " 📁 FS URL     : http://$IP:$FS_PORT"
+echo " 🗄️ MongoDB    : mongodb://127.0.0.1:$MONGO_PORT/$GENIEACS_DBNAME"
+echo " 🔑 JWT key    : $BASE_DIR/genieacs.env"
+echo " Log genieacs  : $BASE_DIR/log"
+echo " Mongo log     : /var/log/mongodb/mongod-$INSTANCE.log"
+echo "------------------------------------------------------------"
+echo "Services systemd:"
+echo " - mongodb-$INSTANCE.service"
+for SVC in "${SERVICES[@]}"; do
+  echo " - genieacs-$INSTANCE-$SVC.service"
+done
+echo "============================================================"
+echo ""
