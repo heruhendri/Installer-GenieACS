@@ -30,7 +30,7 @@ chmod +x install-genieacs.sh
 ```bash
 wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs2.sh
 chmod +x install-genieacs2.sh
-./install-genieacs.sh
+./install-genieacs2.sh
 ```
 ---
 
