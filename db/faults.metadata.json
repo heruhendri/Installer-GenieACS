@@ -1,1 +1,1 @@
-{"options":{},"indexes":[{"v":2,"key":{"_id":1},"name":"_id_","ns":"genieacs.faults"}],"uuid":"5a39ac2d7f4445b0a4e9f674d9c3dfbf"}
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"215869e68a0b4e72805d51e2715d3012","collectionName":"faults","type":"collection"}
