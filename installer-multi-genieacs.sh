@@ -2,6 +2,7 @@
 
 # ==========================================================
 # MULTI-INSTANCE GENIEACS INSTALLER FOR NAT VPS
+# Perbaikan: Mengubah target mongorestore dari 'db/genieacs' menjadi 'db'
 # ==========================================================
 
 # Colors
@@ -10,7 +11,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# --- PERBAIKAN #1: PASTIKAN ROOT ---
+# --- PASTIKAN ROOT ---
 if [ "$(id -u)" -ne 0 ]; then
    echo -e "${RED}Error: Script ini harus dijalankan sebagai root (atau menggunakan sudo).${NC}"
    exit 1
@@ -122,7 +123,6 @@ mkdir -p "$INSTALL_DIR/ext"
 mkdir -p "$LOG_DIR"
 
 chown -R genieacs:genieacs "$INSTALL_DIR"
-# --- PERBAIKAN #4: PERMISSIONS LOG ---
 chown genieacs:genieacs "$LOG_DIR"
 chmod 775 "$LOG_DIR"
 chmod 755 "$INSTALL_DIR"
@@ -263,8 +263,7 @@ else
     # Langkah 1: Persiapan dan Unduh Data Preset
     echo -e "${GREEN}================== Mengunduh Preset Parameter ==================${NC}"
     
-    # --- PERBAIKAN #3: HAPUS REDUNDANSI INSTALL GIT ---
-    # Cek dan instal git (redundant, tapi menjaga jika Bagian 2 di-skip). Baris ini dipertahankan sebagai fallback.
+    # Cek dan instal git (pertahankan sebagai fallback)
     if ! command -v git &> /dev/null; then
         apt install git -y
     fi
@@ -284,7 +283,6 @@ else
 
         # Langkah 2: Menghentikan Service GenieACS sementara (HANYA INSTANCE INI)
         echo -e "${GREEN}================== Menghentikan layanan ${INSTANCE_NAME} sementara ==================${NC}"
-        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
         systemctl stop --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
 
         # Langkah 3: Melakukan Restore Database (MENGGUNAKAN NAMA INSTANCE)
@@ -293,13 +291,12 @@ else
         # Masuk ke folder yang berisi dump database 'db'
         cd /tmp/genieacs_restore/
 
-        # Lakukan restore: menghapus database lama dan menggantinya dengan dump baru
-        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
-        mongorestore --drop --db genieacs-${INSTANCE_NAME} db/genieacs 
+        # !!! PERBAIKAN KRITIS UNTUK ERROR PATH FILE MONGORESTORE !!!
+        # Path diubah dari 'db/genieacs' menjadi 'db' karena file BSON ada langsung di folder 'db'.
+        mongorestore --drop --db genieacs-${INSTANCE_NAME} db 
         
         # Langkah 4: Memulai Kembali Service GenieACS
         echo -e "${GREEN}================== Memulai kembali layanan ${INSTANCE_NAME} ==================${NC}"
-        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
         systemctl start --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
 
         # Langkah 5: Cleanup
