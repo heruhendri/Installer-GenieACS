@@ -2,9 +2,12 @@
 echo "============================================"
 echo "      INSTALLER MULTI GENIEACS + MULTI GUI"
 echo "            NATVPS Ubuntu 20/22/24"
-echo "        By Hendri - Auto Multi Instance"
+echo "       AUTO DELETE INSTALLER AFTER FINISH"
 echo "============================================"
 sleep 2
+
+# SIMPAN NAMA FILE INSTALLER
+INSTALLER_FILE="$(basename "$0")"
 
 # ---------------------------------------------------------------------
 # 1. UPDATE
@@ -61,7 +64,7 @@ do
 
     mkdir -p $INSTALL_DIR/config
 
-    echo "=> Membuat config..."
+    echo "=> Membuat config backend..."
     cat > $INSTALL_DIR/config/config.json <<EOF
 {
   "cwmp": { "port": $CWMP_PORT },
@@ -73,7 +76,7 @@ do
 EOF
 
     # ---------------------------------------------------------------------
-    # REDIS INSTANCE BARU
+    # REDIS INSTANCE
     # ---------------------------------------------------------------------
     echo "=> Membuat Redis instance port $REDIS_PORT"
     REDIS_CONF="/etc/redis/redis-${SERVICE_NAME}.conf"
@@ -101,7 +104,7 @@ EOF
     systemctl start redis-${SERVICE_NAME}
 
     # ---------------------------------------------------------------------
-    # SYSTEMD SERVICE BACKEND GENIEACS
+    # BACKEND GENIEACS SERVICE
     # ---------------------------------------------------------------------
     echo "=> Membuat systemd service backend..."
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
@@ -136,7 +139,7 @@ EOF
     npm install
     npm run build
 
-    echo "=> Membuat systemd service GUI instance..."
+    echo "=> Membuat GUI systemd service..."
     cat > /etc/systemd/system/${GUI_SERVICE}.service <<EOF
 [Unit]
 Description=GenieACS GUI Instance ${i}
@@ -156,15 +159,14 @@ EOF
     systemctl enable ${GUI_SERVICE}
     systemctl start ${GUI_SERVICE}
 
-
     echo ""
     echo "=== Instance #$i selesai dibuat ==="
-    echo "CWMP : $CWMP_PORT"
-    echo "NBI  : $NBI_PORT"
-    echo "FS   : $FS_PORT"
-    echo "GUI  : http://IP-VPS:$GUI_PORT"
-    echo "Redis: $REDIS_PORT"
-    echo "DB   : mongodb://localhost:27017/$DB_NAME"
+    echo "GUI     : http://IP-VPS:$GUI_PORT"
+    echo "CWMP    : $CWMP_PORT"
+    echo "NBI     : $NBI_PORT"
+    echo "FS      : $FS_PORT"
+    echo "Redis   : $REDIS_PORT"
+    echo "Database: $DB_NAME"
     echo ""
 
     # NEXT PORT
@@ -176,11 +178,12 @@ EOF
 
 done
 
+
 echo ""
 echo "============================================"
 echo "   INSTALLASI MULTI GENIEACS + MULTI GUI SELESAI!"
 echo "============================================"
-echo "Untuk cek service:"
-echo "  systemctl status genieacs1"
-echo "  systemctl status genieacs-gui1"
-echo ""
+echo "Menghapus file installer..."
+rm -f "$INSTALLER_FILE"
+echo "Installer berhasil dihapus."
+echo "============================================"
