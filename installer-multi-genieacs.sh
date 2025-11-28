@@ -62,12 +62,25 @@ if ! command -v node >/dev/null 2>&1; then
   apt install -y nodejs
 fi
 
-# install mongodb package (distro) if mongod not present
+# install MongoDB 7.0 (official repo) jika mongod belum ada
 if ! command -v mongod >/dev/null 2>&1; then
-  # try installing distro mongodb
-  apt install -y mongodb
-  # note: some distros/package names differ; adjust if necessary
+  echo "Menginstal MongoDB Community Server 7.0..."
+
+  # Import GPG Key
+  curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+
+  # Tambah repo MongoDB
+  echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] \
+https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/7.0 multiverse" \
+  | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+  apt update
+  apt install -y mongodb-org
+
+  # Disable default mongod agar tidak bentrok (kita pakai mongod per instance)
+  systemctl disable --now mongod || true
 fi
+
 
 # create system user for this instance
 if ! id -u "$GENIEACS_USER" >/dev/null 2>&1; then
