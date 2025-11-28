@@ -16,7 +16,7 @@ Script ini digunakan untuk **menginstall GenieACS lengkap** pada **VPS / NATVPS 
 ---
 ![Screnshoot Dashboard](https://github.com/heruhendri/Installer-GenieACS/blob/main/ss.png)
 
-## 🚀 Cara Instalasi (Installer 1 Menggunakan Port 3000. Installer 2 Menggunakan Port 10000)
+## 🚀 Cara Instalasi (Installer 1 Menggunakan Port 3000. Installer 2 Menginstall Multi GenieACS)
 
 ### 1. Download dan jalankan installer 1
 
