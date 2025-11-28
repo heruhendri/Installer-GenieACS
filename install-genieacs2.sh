@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "============================================"
-echo "      INSTALLER MULTI GENIEACS (TR-069)"
+echo "      INSTALLER MULTI GENIEACS + MULTI GUI"
 echo "            NATVPS Ubuntu 20/22/24"
 echo "        By Hendri - Auto Multi Instance"
 echo "============================================"
@@ -22,15 +22,15 @@ apt install -y nodejs
 # 3. INSTALL MONGODB & REDIS
 # ---------------------------------------------------------------------
 apt install -y mongodb redis-server
-
 systemctl enable mongodb
-systemctl enable redis-server
 systemctl start mongodb
-systemctl start redis-server
 
+# ---------------------------------------------------------------------
+# INPUT
+# ---------------------------------------------------------------------
 echo ""
 echo "============================================"
-echo "Masukkan jumlah instance GenieACS yang ingin diinstall:"
+echo "Berapa banyak instance GenieACS yang ingin dibuat?"
 echo "Contoh: 2 atau 3 atau 5"
 echo "============================================"
 read -p "Jumlah instance: " INSTANCES
@@ -52,6 +52,7 @@ do
     INSTALL_DIR="/opt/genieacs$i"
     DB_NAME="genieacs${i}db"
     SERVICE_NAME="genieacs$i"
+    GUI_SERVICE="genieacs-gui$i"
 
     echo "=> Clone GenieACS..."
     git clone https://github.com/genieacs/genieacs $INSTALL_DIR
@@ -72,7 +73,7 @@ do
 EOF
 
     # ---------------------------------------------------------------------
-    # BUAT REDIS TAMBAHAN
+    # REDIS INSTANCE BARU
     # ---------------------------------------------------------------------
     echo "=> Membuat Redis instance port $REDIS_PORT"
     REDIS_CONF="/etc/redis/redis-${SERVICE_NAME}.conf"
@@ -100,9 +101,9 @@ EOF
     systemctl start redis-${SERVICE_NAME}
 
     # ---------------------------------------------------------------------
-    # SYSTEMD SERVICE GENIEACS
+    # SYSTEMD SERVICE BACKEND GENIEACS
     # ---------------------------------------------------------------------
-    echo "=> Membuat systemd service..."
+    echo "=> Membuat systemd service backend..."
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=GenieACS Instance ${i}
@@ -124,14 +125,46 @@ EOF
     systemctl enable ${SERVICE_NAME}
     systemctl start ${SERVICE_NAME}
 
+    # ---------------------------------------------------------------------
+    # GUI FRONTEND PER INSTANCE
+    # ---------------------------------------------------------------------
+    echo "=> Install GUI frontend instance #$i..."
+
+    cd ${INSTALL_DIR}
+    git clone https://github.com/genieacs/genieacs-gui gui
+    cd gui
+    npm install
+    npm run build
+
+    echo "=> Membuat systemd service GUI instance..."
+    cat > /etc/systemd/system/${GUI_SERVICE}.service <<EOF
+[Unit]
+Description=GenieACS GUI Instance ${i}
+After=network.target ${SERVICE_NAME}.service
+
+[Service]
+User=root
+WorkingDirectory=${INSTALL_DIR}/gui
+ExecStart=/usr/bin/node server.js --port ${GUI_PORT}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable ${GUI_SERVICE}
+    systemctl start ${GUI_SERVICE}
+
+
     echo ""
-    echo "=== Instance #$i berhasil dibuat ==="
-    echo "CWMP: $CWMP_PORT"
-    echo "NBI : $NBI_PORT"
-    echo "FS  : $FS_PORT"
-    echo "GUI : $GUI_PORT"
+    echo "=== Instance #$i selesai dibuat ==="
+    echo "CWMP : $CWMP_PORT"
+    echo "NBI  : $NBI_PORT"
+    echo "FS   : $FS_PORT"
+    echo "GUI  : http://IP-VPS:$GUI_PORT"
     echo "Redis: $REDIS_PORT"
-    echo "DB: mongodb://localhost:27017/$DB_NAME"
+    echo "DB   : mongodb://localhost:27017/$DB_NAME"
     echo ""
 
     # NEXT PORT
@@ -145,19 +178,9 @@ done
 
 echo ""
 echo "============================================"
-echo "   INSTALLASI MULTI GENIEACS SELESAI!"
+echo "   INSTALLASI MULTI GENIEACS + MULTI GUI SELESAI!"
 echo "============================================"
-echo "Setiap instance sudah memiliki:"
-echo "✔ Port berbeda"
-echo "✔ Redis sendiri"
-echo "✔ Database MongoDB sendiri"
-echo "✔ Systemd service sendiri"
-echo "✔ Lokasi: /opt/genieacsX"
-echo ""
-echo "Untuk cek status:"
+echo "Untuk cek service:"
 echo "  systemctl status genieacs1"
-echo "  systemctl status genieacs2"
-echo ""
-echo "Untuk restart:"
-echo "  systemctl restart genieacs1"
+echo "  systemctl status genieacs-gui1"
 echo ""
