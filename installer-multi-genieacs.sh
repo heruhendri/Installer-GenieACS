@@ -2,8 +2,6 @@
 
 # ==========================================================
 # MULTI-INSTANCE GENIEACS INSTALLER FOR NAT VPS
-# Modified by Gemini
-# Original Logic by Hendri
 # ==========================================================
 
 # Colors
@@ -11,6 +9,12 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# --- PERBAIKAN #1: PASTIKAN ROOT ---
+if [ "$(id -u)" -ne 0 ]; then
+   echo -e "${RED}Error: Script ini harus dijalankan sebagai root (atau menggunakan sudo).${NC}"
+   exit 1
+fi
 
 echo -e "${GREEN}=== MULTI-INSTANCE GENIEACS INSTALLER ===${NC}"
 echo -e "${YELLOW}Script ini memungkinkan Anda menginstall banyak GenieACS dalam satu VPS.${NC}"
@@ -51,10 +55,10 @@ echo ""
 echo -e "${GREEN}Ringkasan Instalasi:${NC}"
 echo "Instance : $INSTANCE_NAME"
 echo "Database : genieacs-${INSTANCE_NAME}"
-echo "UI Port  : $PORT_UI"
+echo "UI Port  : $PORT_UI"
 echo "CWMP Port: $PORT_CWMP"
 echo "NBI Port : $PORT_NBI"
-echo "FS Port  : $PORT_FS"
+echo "FS Port  : $PORT_FS"
 echo ""
 read -p "Lanjut install? (y/n): " CONFIRM
 if [[ "$CONFIRM" != "y" ]]; then
@@ -105,6 +109,8 @@ fi
 # ---------------------------------------------------------------------
 # 3. SETUP USER & DIRECTORIES
 # ---------------------------------------------------------------------
+echo ""
+echo -e "${YELLOW}[ SETUP DIREKTORI & USER ]${NC}"
 # Buat user genieacs jika belum ada
 id -u genieacs &>/dev/null || useradd --system --no-create-home --user-group genieacs
 
@@ -115,13 +121,17 @@ LOG_DIR="/var/log/genieacs-${INSTANCE_NAME}"
 mkdir -p "$INSTALL_DIR/ext"
 mkdir -p "$LOG_DIR"
 
-chown -R genieacs:genieacs "$INSTALL_DIR" "$LOG_DIR"
+chown -R genieacs:genieacs "$INSTALL_DIR"
+# --- PERBAIKAN #4: PERMISSIONS LOG ---
+chown genieacs:genieacs "$LOG_DIR"
+chmod 775 "$LOG_DIR"
 chmod 755 "$INSTALL_DIR"
 
 # ---------------------------------------------------------------------
 # 4. CREATE ENV CONFIG (SPECIFIC DB & PORTS)
 # ---------------------------------------------------------------------
-# Kita menambahkan GENIEACS_MONGODB_CONNECTION_URL untuk memisahkan database
+echo ""
+echo -e "${YELLOW}[ KONFIGURASI LINGKUNGAN (.env) ]${NC}"
 
 cat <<EOF > "$INSTALL_DIR/genieacs.env"
 GENIEACS_CWMP_HOST=0.0.0.0
@@ -148,7 +158,8 @@ chmod 600 "$INSTALL_DIR/genieacs.env"
 # ---------------------------------------------------------------------
 # 5. CREATE SYSTEMD SERVICE FILES (NAMED BY INSTANCE)
 # ---------------------------------------------------------------------
-echo "Membuat Service Systemd untuk $INSTANCE_NAME..."
+echo ""
+echo -e "${YELLOW}[ MEMBUAT LAYANAN SYSTEMD ]${NC}"
 
 # CWMP Service
 cat <<EOF > /etc/systemd/system/genieacs-${INSTANCE_NAME}-cwmp.service
@@ -220,17 +231,90 @@ EOF
 
 # Reload & Start Services
 systemctl daemon-reload
+echo -e "${GREEN}Mengaktifkan dan memulai layanan ${INSTANCE_NAME}...${NC}"
 systemctl enable --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
 
 # ---------------------------------------------------------------------
 # 6. FIREWALL
 # ---------------------------------------------------------------------
+echo ""
+echo -e "${YELLOW}[ KONFIGURASI FIREWALL ]${NC}"
 if command -v ufw &> /dev/null; then
+    echo -e "${GREEN}Mengizinkan port di Firewall (UFW)...${NC}"
     ufw allow $PORT_UI/tcp
     ufw allow $PORT_CWMP/tcp
     ufw allow $PORT_NBI/tcp
     ufw allow $PORT_FS/tcp
+else
+    echo -e "${YELLOW}UFW tidak terinstal. Lewati konfigurasi Firewall.${NC}"
 fi
+
+# =======================================================================================
+# BLOK RESTORE PRESET PARAMETER (DARI GITHUB)
+# =======================================================================================
+
+echo -e "${GREEN}============================================================================${NC}"
+echo -e "${GREEN} Apakah anda ingin menginstal Preset Parameter Kustom? (y/n)${NC}"
+read confirmation
+
+if [ "$confirmation" != "y" ]; then
+    echo -e "${GREEN}Instalasi Preset Parameter dibatalkan.${NC}"
+else
+    # Langkah 1: Persiapan dan Unduh Data Preset
+    echo -e "${GREEN}================== Mengunduh Preset Parameter ==================${NC}"
+    
+    # --- PERBAIKAN #3: HAPUS REDUNDANSI INSTALL GIT ---
+    # Cek dan instal git (redundant, tapi menjaga jika Bagian 2 di-skip). Baris ini dipertahankan sebagai fallback.
+    if ! command -v git &> /dev/null; then
+        apt install git -y
+    fi
+
+    # Mengunduh hanya folder 'db' menggunakan teknik sparse checkout (lebih cepat)
+    mkdir -p /tmp/genieacs_restore
+    cd /tmp/genieacs_restore
+
+    git init
+    git remote add origin https://github.com/heruhendri/Installer-GenieACS.git
+    git config core.sparseCheckout true
+    echo "db" >> .git/info/sparse-checkout
+    git pull origin main
+
+    if [ -d "db" ]; then
+        echo -e "${GREEN}Preset Parameter berhasil diunduh ke /tmp/genieacs_restore/db.${NC}"
+
+        # Langkah 2: Menghentikan Service GenieACS sementara (HANYA INSTANCE INI)
+        echo -e "${GREEN}================== Menghentikan layanan ${INSTANCE_NAME} sementara ==================${NC}"
+        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
+        systemctl stop --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
+
+        # Langkah 3: Melakukan Restore Database (MENGGUNAKAN NAMA INSTANCE)
+        echo -e "${GREEN}================== Melakukan Restore Preset ke Database genieacs-${INSTANCE_NAME} ==================${NC}"
+        
+        # Masuk ke folder yang berisi dump database 'db'
+        cd /tmp/genieacs_restore/
+
+        # Lakukan restore: menghapus database lama dan menggantinya dengan dump baru
+        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
+        mongorestore --drop --db genieacs-${INSTANCE_NAME} db/genieacs 
+        
+        # Langkah 4: Memulai Kembali Service GenieACS
+        echo -e "${GREEN}================== Memulai kembali layanan ${INSTANCE_NAME} ==================${NC}"
+        # --- PERBAIKAN #2: HAPUS SUDO (KARENA SUDAH ROOT) ---
+        systemctl start --now genieacs-${INSTANCE_NAME}-cwmp genieacs-${INSTANCE_NAME}-nbi genieacs-${INSTANCE_NAME}-fs genieacs-${INSTANCE_NAME}-ui
+
+        # Langkah 5: Cleanup
+        echo -e "${GREEN}================== Membersihkan file sementara ==================${NC}"
+        rm -rf /tmp/genieacs_restore
+        
+        echo -e "${GREEN}=================== VIRTUAL PARAMETER BERHASIL DI INSTALL di genieacs-${INSTANCE_NAME}. =================${NC}"
+    else
+        echo -e "${RED}Gagal mengunduh folder 'db'. Pastikan koneksi internet berfungsi dan repositori valid.${NC}"
+    fi
+fi
+
+# =======================================================================================
+# AKHIR BLOK RESTORE
+# =======================================================================================
 
 # ---------------------------------------------------------------------
 # 7. SUMMARY
@@ -241,15 +325,17 @@ echo ""
 echo "============================================================"
 echo -e " 🎉 INSTALASI GENIEACS INSTANCE: ${GREEN}$INSTANCE_NAME${NC} BERHASIL"
 echo "============================================================"
-echo " 🌐 GUI URL  : http://$IP:$PORT_UI"
+echo " 🌐 GUI URL  : http://$IP:$PORT_UI"
 echo " 📡 CWMP URL : http://$IP:$PORT_CWMP"
-echo " 📁 FS URL   : http://$IP:$PORT_FS"
+echo " 📁 FS URL   : http://$IP:$PORT_FS"
 echo ""
-echo " 💾 Config   : $INSTALL_DIR/genieacs.env"
-echo " 📝 Logs     : $LOG_DIR"
-echo " 🗄️  Database : genieacs-${INSTANCE_NAME}"
+echo " 💾 Config   : $INSTALL_DIR/genieacs.env"
+echo " 📝 Logs     : $LOG_DIR"
+echo " 🗄️  Database : genieacs-${INSTANCE_NAME}"
 echo "============================================================"
 echo " Commands untuk mengelola instance ini:"
-echo " Stop  : systemctl stop genieacs-${INSTANCE_NAME}-*"
+echo " Stop  : systemctl stop genieacs-${INSTANCE_NAME}-*"
 echo " Start : systemctl start genieacs-${INSTANCE_NAME}-*"
+echo " Restart: systemctl restart genieacs-${INSTANCE_NAME}-*" 
+echo " Status : systemctl status genieacs-${INSTANCE_NAME}-*" 
 echo "============================================================"
