@@ -1,49 +1,47 @@
 #!/bin/bash
 echo "============================================"
-echo "      INSTALLER MULTI GENIEACS + MULTI GUI"
-echo "            NATVPS Ubuntu 20/22/24"
-echo "       AUTO DELETE INSTALLER AFTER FINISH"
+echo "     INSTALLER MULTI GENIEACS + MULTI GUI"
+echo "          NATVPS UBUNTU 20/22/24 LTS"
+echo "           By Hendri — FIXED VERSION"
 echo "============================================"
-sleep 2
 
-# SIMPAN NAMA FILE INSTALLER
 INSTALLER_FILE="$(basename "$0")"
+sleep 1
 
 # ---------------------------------------------------------------------
-# 1. UPDATE
+# UPDATE SYSTEM
 # ---------------------------------------------------------------------
-apt update -y
-apt install -y curl wget git build-essential gnupg
+apt update -y && apt upgrade -y
+apt install -y curl wget git build-essential gnupg nano
 
 # ---------------------------------------------------------------------
-# 2. INSTALL NODEJS 18 (Stable)
+# INSTALL NODEJS 18 LTS
 # ---------------------------------------------------------------------
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs
 
 # ---------------------------------------------------------------------
-# 3. INSTALL MONGODB & REDIS
+# INSTALL MONGODB & REDIS
 # ---------------------------------------------------------------------
-apt install -y mongodb redis-server
-systemctl enable mongodb
-systemctl start mongodb
+apt install -y mongodb-org redis-server || apt install -y mongodb redis-server
+
+systemctl enable redis-server
+systemctl start redis-server
+systemctl enable mongod || systemctl enable mongodb
+systemctl start mongod || systemctl start mongodb
 
 # ---------------------------------------------------------------------
-# INPUT
+# INPUT INSTANCES
 # ---------------------------------------------------------------------
 echo ""
-echo "============================================"
-echo "Berapa banyak instance GenieACS yang ingin dibuat?"
-echo "Contoh: 2 atau 3 atau 5"
-echo "============================================"
+echo "Masukkan jumlah instance GenieACS yang ingin dibuat:"
 read -p "Jumlah instance: " INSTANCES
 
-# PORT AWAL
 CWMP_PORT=7547
 NBI_PORT=7557
 FS_PORT=7567
 GUI_PORT=3000
-REDIS_PORT=6379
+REDIS_PORT=6380
 
 for i in $(seq 1 $INSTANCES)
 do
@@ -57,14 +55,15 @@ do
     SERVICE_NAME="genieacs$i"
     GUI_SERVICE="genieacs-gui$i"
 
-    echo "=> Clone GenieACS..."
+    # ---------------------------------------------------------------------
+    # CLONE GENIEACS BACKEND
+    # ---------------------------------------------------------------------
     git clone https://github.com/genieacs/genieacs $INSTALL_DIR
     cd $INSTALL_DIR
-    npm install
+    npm install --legacy-peer-deps
 
     mkdir -p $INSTALL_DIR/config
 
-    echo "=> Membuat config backend..."
     cat > $INSTALL_DIR/config/config.json <<EOF
 {
   "cwmp": { "port": $CWMP_PORT },
@@ -76,12 +75,12 @@ do
 EOF
 
     # ---------------------------------------------------------------------
-    # REDIS INSTANCE
+    # REDIS INSTANCE PER GENIEACS
     # ---------------------------------------------------------------------
-    echo "=> Membuat Redis instance port $REDIS_PORT"
     REDIS_CONF="/etc/redis/redis-${SERVICE_NAME}.conf"
+
     cp /etc/redis/redis.conf $REDIS_CONF
-    sed -i "s/^port .*/port $REDIS_PORT/" $REDIS_CONF
+    sed -i "s/^port .*/port $REDIS_PORT/g" $REDIS_CONF
     sed -i "s|pidfile .*|pidfile /var/run/redis-${SERVICE_NAME}.pid|" $REDIS_CONF
 
     cat > /etc/systemd/system/redis-${SERVICE_NAME}.service <<EOF
@@ -90,7 +89,7 @@ Description=Redis Instance for ${SERVICE_NAME}
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/redis-server $REDIS_CONF
+ExecStart=/usr/bin/redis-server ${REDIS_CONF}
 ExecStop=/usr/bin/redis-cli -p ${REDIS_PORT} shutdown
 User=redis
 Group=redis
@@ -104,13 +103,12 @@ EOF
     systemctl start redis-${SERVICE_NAME}
 
     # ---------------------------------------------------------------------
-    # BACKEND GENIEACS SERVICE
+    # GENIEACS BACKEND SERVICE
     # ---------------------------------------------------------------------
-    echo "=> Membuat systemd service backend..."
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
-Description=GenieACS Instance ${i}
-After=network.target redis-${SERVICE_NAME}.service mongodb.service
+Description=GenieACS Backend Instance ${i}
+After=network.target redis-${SERVICE_NAME}.service mongodb.service mongod.service
 
 [Service]
 User=root
@@ -124,22 +122,20 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
     systemctl enable ${SERVICE_NAME}
     systemctl start ${SERVICE_NAME}
 
     # ---------------------------------------------------------------------
-    # GUI FRONTEND PER INSTANCE
+    # GENIEACS GUI PER INSTANCE
     # ---------------------------------------------------------------------
-    echo "=> Install GUI frontend instance #$i..."
-
-    cd ${INSTALL_DIR}
+    cd $INSTALL_DIR
     git clone https://github.com/genieacs/genieacs-gui gui
     cd gui
-    npm install
+    rm -rf node_modules build
+    npm install --legacy-peer-deps
     npm run build
 
-    echo "=> Membuat GUI systemd service..."
+    # GUI SERVICE
     cat > /etc/systemd/system/${GUI_SERVICE}.service <<EOF
 [Unit]
 Description=GenieACS GUI Instance ${i}
@@ -155,21 +151,23 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
     systemctl enable ${GUI_SERVICE}
     systemctl start ${GUI_SERVICE}
 
+    # ---------------------------------------------------------------------
+    # OUTPUT INFO
+    # ---------------------------------------------------------------------
     echo ""
-    echo "=== Instance #$i selesai dibuat ==="
+    echo "===== INSTANCE #$i BERHASIL DIBUAT ====="
     echo "GUI     : http://IP-VPS:$GUI_PORT"
     echo "CWMP    : $CWMP_PORT"
     echo "NBI     : $NBI_PORT"
     echo "FS      : $FS_PORT"
     echo "Redis   : $REDIS_PORT"
-    echo "Database: $DB_NAME"
-    echo ""
+    echo "DB      : $DB_NAME"
+    echo "========================================"
 
-    # NEXT PORT
+    # Next port shift
     CWMP_PORT=$((CWMP_PORT+100))
     NBI_PORT=$((NBI_PORT+100))
     FS_PORT=$((FS_PORT+100))
@@ -178,12 +176,10 @@ EOF
 
 done
 
-
 echo ""
 echo "============================================"
-echo "   INSTALLASI MULTI GENIEACS + MULTI GUI SELESAI!"
+echo "  INSTALASI MULTI GENIEACS + MULTI GUI SELESAI"
 echo "============================================"
-echo "Menghapus file installer..."
+echo "Menghapus installer..."
 rm -f "$INSTALLER_FILE"
-echo "Installer berhasil dihapus."
-echo "============================================"
+echo "Installer berhasil dihapus!"
