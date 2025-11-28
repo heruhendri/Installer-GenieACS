@@ -81,14 +81,15 @@ mkdir -p "$MONGO_DBPATH"
 mkdir -p "$BASE_DIR/ext"
 chown -R "$GENIEACS_USER":"$GENIEACS_USER" "$BASE_DIR" "$LOG_DIR" "$MONGO_DBPATH"
 
-# download genieacs once (cache in /tmp) then copy to base dir
-TMP_TAR="/tmp/genieacs-v1.2.15.tar.gz"
+# download genieacs (correct tar link - FIX)
+TMP_TAR="/tmp/genieacs.tar.gz"
 if [ ! -f "$TMP_TAR" ]; then
-  echo "Downloading GenieACS v1.2.15..."
-  wget -q -O "$TMP_TAR" "https://github.com/genieacs/genieacs/archive/refs/tags/v1.2.15.tar.gz"
+  echo "Downloading GenieACS source..."
+  wget -q -O "$TMP_TAR" "https://codeload.github.com/genieacs/genieacs/tar.gz/refs/heads/master"
 fi
 
 tar -xzf "$TMP_TAR" -C "$BASE_DIR" --strip 1
+
 
 # install node deps for this instance
 cd "$BASE_DIR"
