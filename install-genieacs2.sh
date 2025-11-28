@@ -1,120 +1,163 @@
 #!/bin/bash
-# Installer GenieACS untuk Ubuntu 22.04 / NATVPS
+echo "============================================"
+echo "      INSTALLER MULTI GENIEACS (TR-069)"
+echo "            NATVPS Ubuntu 20/22/24"
+echo "        By Hendri - Auto Multi Instance"
+echo "============================================"
+sleep 2
 
-echo "=== Update sistem ==="
-apt update -y && apt upgrade -y
+# ---------------------------------------------------------------------
+# 1. UPDATE
+# ---------------------------------------------------------------------
+apt update -y
+apt install -y curl wget git build-essential gnupg
 
-echo "=== Install dependency dasar ==="
-apt install -y curl gnupg build-essential redis-server
-
-echo "=== Install Node.js 20 ==="
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+# ---------------------------------------------------------------------
+# 2. INSTALL NODEJS 18 (Stable)
+# ---------------------------------------------------------------------
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs
 
-echo "=== Install MongoDB Community Edition (versi Ubuntu default) ==="
-apt install -y mongodb
+# ---------------------------------------------------------------------
+# 3. INSTALL MONGODB & REDIS
+# ---------------------------------------------------------------------
+apt install -y mongodb redis-server
 
-echo "=== Enable & Start MongoDB ==="
 systemctl enable mongodb
+systemctl enable redis-server
 systemctl start mongodb
+systemctl start redis-server
 
-echo "=== Clone GenieACS ==="
-mkdir -p /opt/genieacs
-cd /opt/genieacs
-wget https://github.com/genieacs/genieacs/archive/refs/tags/v1.2.15.tar.gz
-tar -xzvf v1.2.15.tar.gz --strip 1
+echo ""
+echo "============================================"
+echo "Masukkan jumlah instance GenieACS yang ingin diinstall:"
+echo "Contoh: 2 atau 3 atau 5"
+echo "============================================"
+read -p "Jumlah instance: " INSTANCES
 
-echo "=== Install dependency GenieACS ==="
-npm install --production
+# PORT AWAL
+CWMP_PORT=7547
+NBI_PORT=7557
+FS_PORT=7567
+GUI_PORT=3000
+REDIS_PORT=6379
 
-echo "=== Membuat user genieacs ==="
-useradd -r -s /bin/false genieacs || true
+for i in $(seq 1 $INSTANCES)
+do
+    echo ""
+    echo "============================================"
+    echo "   MEMBUAT GENIEACS INSTANCE #$i"
+    echo "============================================"
 
-echo "=== Membuat direktori log ==="
-mkdir -p /var/log/genieacs
-chown -R genieacs:genieacs /var/log/genieacs
+    INSTALL_DIR="/opt/genieacs$i"
+    DB_NAME="genieacs${i}db"
+    SERVICE_NAME="genieacs$i"
 
-echo "=== Membuat Environment Config ==="
-cat >/etc/genieacs.env <<EOF
-GENIEACS_CWMP_PORT=7547
-GENIEACS_NBI_PORT=7557
-GENIEACS_FS_PORT=7567
-GENIEACS_UI_PORT=10000
-GENIEACS_UI_JWT_SECRET=$(openssl rand -hex 32)
-GENIEACS_EXT_DIR=/opt/genieacs/ext
-GENIEACS_DEBUG_FILE=/var/log/genieacs/genieacs-debug.yaml
+    echo "=> Clone GenieACS..."
+    git clone https://github.com/genieacs/genieacs $INSTALL_DIR
+    cd $INSTALL_DIR
+    npm install
+
+    mkdir -p $INSTALL_DIR/config
+
+    echo "=> Membuat config..."
+    cat > $INSTALL_DIR/config/config.json <<EOF
+{
+  "cwmp": { "port": $CWMP_PORT },
+  "nbi": { "port": $NBI_PORT },
+  "fs": { "port": $FS_PORT },
+  "db": { "mongoUrl": "mongodb://localhost:27017/${DB_NAME}" },
+  "redis": { "port": $REDIS_PORT }
+}
 EOF
 
-echo "=== Membuat service systemd ==="
+    # ---------------------------------------------------------------------
+    # BUAT REDIS TAMBAHAN
+    # ---------------------------------------------------------------------
+    echo "=> Membuat Redis instance port $REDIS_PORT"
+    REDIS_CONF="/etc/redis/redis-${SERVICE_NAME}.conf"
+    cp /etc/redis/redis.conf $REDIS_CONF
+    sed -i "s/^port .*/port $REDIS_PORT/" $REDIS_CONF
+    sed -i "s|pidfile .*|pidfile /var/run/redis-${SERVICE_NAME}.pid|" $REDIS_CONF
 
-# CWMP
-cat >/etc/systemd/system/genieacs-cwmp.service <<EOF
+    cat > /etc/systemd/system/redis-${SERVICE_NAME}.service <<EOF
 [Unit]
-Description=GenieACS CWMP
-After=network.target mongodb.service redis-server.service
-
-[Service]
-EnvironmentFile=/etc/genieacs.env
-User=genieacs
-ExecStart=/usr/bin/node /opt/genieacs/bin/genieacs-cwmp
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# NBI
-cat >/etc/systemd/system/genieacs-nbi.service <<EOF
-[Unit]
-Description=GenieACS NBI
-After=network.target mongodb.service redis-server.service
-
-[Service]
-EnvironmentFile=/etc/genieacs.env
-User=genieacs
-ExecStart=/usr/bin/node /opt/genieacs/bin/genieacs-nbi
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# FS
-cat >/etc/systemd/system/genieacs-fs.service <<EOF
-[Unit]
-Description=GenieACS FS
-After=network.target mongodb.service redis-server.service
-
-[Service]
-EnvironmentFile=/etc/genieacs.env
-User=genieacs
-ExecStart=/usr/bin/node /opt/genieacs/bin/genieacs-fs
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# UI
-cat >/etc/systemd/system/genieacs-ui.service <<EOF
-[Unit]
-Description=GenieACS UI
+Description=Redis Instance for ${SERVICE_NAME}
 After=network.target
 
 [Service]
-EnvironmentFile=/etc/genieacs.env
-User=genieacs
-ExecStart=/usr/bin/node /opt/genieacs/bin/genieacs-ui
+ExecStart=/usr/bin/redis-server $REDIS_CONF
+ExecStop=/usr/bin/redis-cli -p ${REDIS_PORT} shutdown
+User=redis
+Group=redis
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable redis-${SERVICE_NAME}
+    systemctl start redis-${SERVICE_NAME}
+
+    # ---------------------------------------------------------------------
+    # SYSTEMD SERVICE GENIEACS
+    # ---------------------------------------------------------------------
+    echo "=> Membuat systemd service..."
+    cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
+[Unit]
+Description=GenieACS Instance ${i}
+After=network.target redis-${SERVICE_NAME}.service mongodb.service
+
+[Service]
+User=root
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=/usr/bin/node dist/bin/genieacs-cwmp --config config/config.json
+ExecStartPost=/usr/bin/node dist/bin/genieacs-nbi --config config/config.json
+ExecStartPost=/usr/bin/node dist/bin/genieacs-fs --config config/config.json
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo "=== Reload service & start ==="
-systemctl daemon-reload
-systemctl enable genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
-systemctl start genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
+    systemctl daemon-reload
+    systemctl enable ${SERVICE_NAME}
+    systemctl start ${SERVICE_NAME}
 
-echo "=== Instalasi selesai ==="
-echo "Akses GenieACS UI melalui http://IP-VPS:10000"
+    echo ""
+    echo "=== Instance #$i berhasil dibuat ==="
+    echo "CWMP: $CWMP_PORT"
+    echo "NBI : $NBI_PORT"
+    echo "FS  : $FS_PORT"
+    echo "GUI : $GUI_PORT"
+    echo "Redis: $REDIS_PORT"
+    echo "DB: mongodb://localhost:27017/$DB_NAME"
+    echo ""
+
+    # NEXT PORT
+    CWMP_PORT=$((CWMP_PORT+100))
+    NBI_PORT=$((NBI_PORT+100))
+    FS_PORT=$((FS_PORT+100))
+    GUI_PORT=$((GUI_PORT+100))
+    REDIS_PORT=$((REDIS_PORT+1))
+
+done
+
+echo ""
+echo "============================================"
+echo "   INSTALLASI MULTI GENIEACS SELESAI!"
+echo "============================================"
+echo "Setiap instance sudah memiliki:"
+echo "✔ Port berbeda"
+echo "✔ Redis sendiri"
+echo "✔ Database MongoDB sendiri"
+echo "✔ Systemd service sendiri"
+echo "✔ Lokasi: /opt/genieacsX"
+echo ""
+echo "Untuk cek status:"
+echo "  systemctl status genieacs1"
+echo "  systemctl status genieacs2"
+echo ""
+echo "Untuk restart:"
+echo "  systemctl restart genieacs1"
+echo ""
