@@ -111,7 +111,7 @@ B -->|Yes| D[Continue]
 D --> E[Input Instance Name & Ports]
 E --> F{Instance Exists?}
 F -->|Yes| X[Error: Instance Already Exists]
-F -->|No| G[Create Directory /opt/genieacs-[INSTANCE]]
+F -->|No| G[Create Directory /opt/genieacs-INSTANCE_NAME]
 
 G --> H[Create Environment File]
 H --> I[Build systemd Services per Component]
@@ -148,8 +148,8 @@ subgraph A["GenieACS Instance"]
 end
 
 A --> DB[(MongoDB Database)]
-A --> LOG[/var/log/genieacs-[INSTANCE]/]
-A --> CFG[/opt/genieacs-[INSTANCE]/genieacs.env]
+A --> LOG[/var/log/genieacs-INSTANCE_NAME/]
+A --> CFG[/opt/genieacs-INSTANCE_NAME/genieacs.env]
 
 ```
 
