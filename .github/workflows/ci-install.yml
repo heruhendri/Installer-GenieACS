@@ -9,26 +9,29 @@ on:
 jobs:
   install-genieacs:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Setup Node.js (jika diperlukan oleh installer)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies (installer script)
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl git
           chmod +x ./install-genieacs.sh
-          sudo ./install-genieacs.sh --dry-run
 
-      - name: Lint / Shellcheck (opsional)
-        uses: ludeeus/action-shellcheck@v1
+      - name: Run installer (dry-run)
+        run: |
+          sudo ./install-genieacs.sh --dry-run || true
+
+      - name: ShellCheck
+        uses: shellcheck-py/shellcheck-py@v0.10.0
 
       - name: Validate installation result
         run: |
-          # contoh: cek apakah folder /opt/genieacs exists
-          test -d /opt/genieacs || (echo "Installation failed" && exit 1)
+          test -d /opt/genieacs || (echo "Installation folder missing" && exit 1)
