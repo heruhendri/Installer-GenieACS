@@ -313,10 +313,23 @@ fi
 # AKHIR BLOK RESTORE
 # =======================================================================================
 
+# ============================================
+# INSTALL GENIEACS-MENU (MANAGEMENT TOOL)
+# ============================================
+echo "Menginstall tool genieacs-menu..."
+
+curl -o /usr/local/bin/genieacs-menu https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/refs/heads/tambah-menu/genieacs-menu.sh
+chmod +x /usr/local/bin/genieacs-menu
+
+# Alias opsional
+ln -sf /usr/local/bin/genieacs-menu /usr/local/bin/genieacs
+
+
 # ---------------------------------------------------------------------
 # 7. SUMMARY
 # ---------------------------------------------------------------------
 IP=$(hostname -I | awk '{print $1}')
+
 
 echo ""
 echo "============================================================"
@@ -336,3 +349,15 @@ echo " Start : systemctl start genieacs-${INSTANCE_NAME}-*"
 echo " Restart: systemctl restart genieacs-${INSTANCE_NAME}-*" 
 echo " Status : systemctl status genieacs-${INSTANCE_NAME}-*" 
 echo "============================================================"
+
+echo ""
+read -p "Apakah Anda ingin menghapus file installer ini? (y/n): " HAPUS
+
+if [[ "$HAPUS" == "y" ]]; then
+    SCRIPT_PATH="$(realpath "$0")"
+    echo "Menghapus file installer: $SCRIPT_PATH"
+    rm -f "$SCRIPT_PATH"
+    echo "Installer berhasil dihapus."
+else
+    echo "Installer tidak dihapus."
+fi
