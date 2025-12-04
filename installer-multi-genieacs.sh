@@ -313,6 +313,18 @@ fi
 # AKHIR BLOK RESTORE
 # =======================================================================================
 
+# ============================================
+# INSTALL GENIEACS-MENU (MANAGEMENT TOOL)
+# ============================================
+echo "Menginstall tool genieacs-menu..."
+
+curl -o /usr/local/bin/genieacs-menu https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/refs/heads/tambah-menu/genieacs-menu.sh
+chmod +x /usr/local/bin/genieacs-menu
+
+# Alias opsional
+ln -sf /usr/local/bin/genieacs-menu /usr/local/bin/genieacs
+
+
 # ---------------------------------------------------------------------
 # 7. SUMMARY
 # ---------------------------------------------------------------------
