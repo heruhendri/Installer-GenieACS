@@ -1,98 +1,168 @@
 
-# GenieACS Installer untuk NATVPS (Ubuntu 22.04)
+# 🚀 Installer GenieACS untuk NATVPS / VPS Ubuntu 22.04
 
-Script ini digunakan untuk **menginstall GenieACS lengkap** pada **VPS / NATVPS Ubuntu 22.04**, termasuk:
+Repository ini berisi **dua installer lengkap** untuk GenieACS:
 
-* Node.js 20
-* MongoDB
-* Redis
-* Konfigurasi environment
-* Service systemd
-* Port default GenieACS
-* Otomatis berjalan saat boot
+### ✅ Installer 1  
+Instalasi standar (single instance) — cocok untuk 1 server GenieACS.
+
+### ✅ Installer 2  
+Mendukung **multi-instance GenieACS** pada satu VPS (client1, client2, dst).  
+Setiap instance punya:
+- Port berbeda  
+- Database MongoDB berbeda  
+- Folder isolasi berbeda  
+- Service systemd berbeda  
+
 ---
 
-### Screnshoot Dashboard GenieACS
----
+## 📸 Screenshot Dashboard
 ![Screnshoot Dashboard](https://github.com/heruhendri/Installer-GenieACS/blob/main/ss.png)
 
-## 🚀 Cara Instalasi (Installer 1 Menggunakan Port 3000. Installer 2 Menginstall Multi GenieACS)
+---
 
-### 1. Download dan jalankan installer 1
+# ⚡ 1. Cara Instalasi
+
+## **Installer 1 (Single Instance – Port Default 3000)**
 
 ```bash
 wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs.sh
 chmod +x install-genieacs.sh
 ./install-genieacs.sh
-```
+````
 
-### 2. Download dan jalankan installer 2
+---
+
+## **Installer 2 (Multi Instance — Client1, Client2, dst.)**
+
 ```bash
 wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/tambah-menu/installer-multi-genieacs.sh
 chmod +x installer-multi-genieacs.sh
 ./installer-multi-genieacs.sh
 ```
+
 ---
 
+# 🧩 2. Perbedaan Installer 1 & 2
 
-## 📌 Perbedaan Installer 2
-1.  **Dependencies (NodeJS/MongoDB)** hanya perlu diinstall sekali.
-2.  Setiap instance akan memiliki **Nama Instance** unik (misal: `client1`, `client2`).
-3.  Setiap instance akan memiliki **Port** yang berbeda (agar tidak bentrok).
-4.  Setiap instance akan memiliki **Database MongoDB** yang terpisah.
-5.  Setiap instance akan memiliki **Service Systemd** yang unik.
+| Fitur                             | Installer 1 | Installer 2 |
+| --------------------------------- | ----------- | ----------- |
+| Single Instance                   | ✅           | ❌           |
+| Multi Instance (client1, client2) | ❌           | ✅           |
+| Database terpisah                 | ❌           | ✅           |
+| Port per instance                 | ❌           | ✅           |
+| Service systemd unik              | ❌           | ✅           |
+| Restore preset DB dari GitHub     | ❌           | ✅           |
+| Menu CLI (genieacs-menu)          | ❌           | ✅           |
 
+---
 
-### Apa yang berubah di script ini?
+# 🧱 3. Struktur Folder Instansi (Installer 2)
 
-1.  **Input Interaktif:**
-    Script sekarang akan meminta **Nama Instance** dan **Port** di awal. Ini krusial untuk NAT VPS di mana port sering kali acak atau terbatas.
+Setiap instance memiliki direktori tersendiri:
 
-      * Jika Anda menginstall pertama kali, Anda bisa menekan Enter untuk menggunakan port default (3000, 7547, dll).
-      * Jika Anda menginstall instance kedua, Anda **WAJIB** memasukkan port yang berbeda (misal: UI 3001, CWMP 7548, dll).
+```
+/opt/genieacs-<instance>/
+│── genieacs.env
+│── ext/
+│
+/var/log/genieacs-<instance>/
+│── cwmp.log
+│── ui.log
+│── fs.log
+│── nbi.log
+```
 
-2.  **Direktori Terisolasi:**
-    Alih-alih semuanya masuk ke `/opt/genieacs`, sekarang file config masuk ke:
-    `/opt/genieacs-<nama_instance>`
-    Ini mencegah instance A membaca config instance B.
+Contoh untuk instance `client1`:
 
-3.  **Database Terpisah:**
-    Script menambahkan baris ini ke file env:
-    `GENIEACS_MONGODB_CONNECTION_URL=mongodb://127.0.0.1:27017/genieacs-${INSTANCE_NAME}`
-    Ini membuat MongoDB membuat database baru khusus untuk instance tersebut. Data pelanggan instance A tidak akan tercampur dengan instance B.
+```
+/opt/genieacs-client1/
+/var/log/genieacs-client1/
+Database: genieacs-client1
+Service:
+  - genieacs-client1-cwmp
+  - genieacs-client1-ui
+  - genieacs-client1-nbi
+  - genieacs-client1-fs
+```
 
-4.  **Service Systemd Unik:**
-    Nama service diubah menjadi `genieacs-<nama_instance>-cwmp`, dst. Ini memungkinkan Anda me-restart satu instance tanpa mematikan instance lainnya.
+---
 
-5.  **Cek Dependensi Pintar:**
-    Script mengecek apakah Node.js, MongoDB, dan core GenieACS sudah terinstall. Jika sudah ada (karena instalasi instance sebelumnya), script akan melewati langkah download/install berat dan langsung ke konfigurasi instance baru. Ini membuat instalasi instance kedua, ketiga, dst, berjalan sangat cepat (kurang dari 10 detik).
+# 🏗 **4. Flowchart Arsitektur Installer Multi-Instance**
 
-### Cara Menggunakan
+GitHub otomatis merender diagram berikut:
 
-1.  Jalankan perintah, misal `installer-multi-genieacs.sh`.
-2.  Beri izin eksekusi:
-    ````bash
-    chmod +x installer-multi-genieacs.sh
-    3.  Jalankan script:
-    ```bash
-    .installer-multi-genieacs.sh
-    4.  Ikuti petunjuk di layar (masukkan nama instance dan port yang dialokasikan oleh provider NAT VPS Anda).
-    ````
+```mermaid
+flowchart TD
 
-## 🎯 Port default yang digunakan
+A[Start Installer] --> B{Dependencies Sudah Terinstal?}
+B -->|Belum| C[Install NodeJS, MongoDB, GenieACS Core]
+B -->|Sudah| D[Lanjut]
 
-| Komponen | Port  |
-| -------- | ----- |
-| CWMP     | 7547  |
-| NBI      | 7557  |
-| FS       | 7567  |
+D --> E[Input Nama Instance & Port]
+E --> F{Folder Instance Sudah Ada?}
+F -->|Ya| X[Error: Instance Sudah Ada → Stop]
+F -->|Tidak| G[Buat Direktori Instance]
+
+G --> H[Buat File Environment (.env)]
+H --> I[Buat Service Systemd (cwmp/ui/fs/nbi)]
+
+I --> J[Reload dan Start Service]
+J --> K{Install Preset DB GitHub?}
+K -->|Ya| L[Download Folder db dari GitHub → mongorestore]
+K -->|Tidak| M[Lewati]
+
+L --> N[Start ulang service instance]
+M --> N
+
+N --> O[Install genieacs-menu CLI]
+O --> P{Hapus Installer?}
+P -->|Ya| Q[rm installer.sh]
+P -->|Tidak| R[Selesai]
+
+Q --> R
+```
+
+---
+
+# 🗃 5. Arsitektur Sistem (High Level)
+
+```mermaid
+flowchart LR
+
+subgraph INSTANCE["Instance GenieACS"]
+    A1[genieacs-cwmp] 
+    A2[genieacs-ui]
+    A3[genieacs-nbi]
+    A4[genieacs-fs]
+end
+
+INSTANCE --> DB[(MongoDB: genieacs-<instance>)]
+INSTANCE --> LOG[/var/log/genieacs-<instance>/]
+INSTANCE --> CFG[/opt/genieacs-<instance>/genieacs.env]
+```
+
+---
+
+# 🌐 6. Port Default
+
+| Komponen | Port |
+| -------- | ---- |
+| CWMP     | 7547 |
+| NBI      | 7557 |
+| FS       | 7567 |
 | UI       | 3000 |
 
-Untuk NATVPS, port **3000** wajib di-port-forward dari panel.
+Untuk NAT VPS:
+
+```
+3000 → Public Port NAT
+7547 → TR-069 WAN management
+```
 
 ---
 
-## 🔧 Akses GenieACS UI
+# 🔧 7. Akses UI
 
 ```
 http://IP-VPS:3000
@@ -100,33 +170,32 @@ http://IP-VPS:3000
 
 ---
 
-## 🗑 Uninstall / Hapus Semua
+# 🗑 8. Uninstall Semua Instance
 
 ```bash
 systemctl stop genieacs-* 
 systemctl disable genieacs-*
-rm -rf /etc/genieacs.env
-rm -rf /opt/genieacs
-rm -rf /var/log/genieacs
+rm -rf /opt/genieacs*
+rm -rf /var/log/genieacs*
 rm /etc/systemd/system/genieacs-*.service
 systemctl daemon-reload
 ```
 
 ---
 
-# ⭐ Fitur Tambahan
+# ⭐ 9. Raw Link Installer
 
-* Auto generate JWT secret
-* Support NATVPS/Virtuozzo
-* Semua service auto start
+```
+https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs.sh
+```
 
 ---
 
-# 🔗 **3. LINK RAW INSTALLER**
+# ✨ 10. Fitur Tambahan
 
-Setelah upload ke GitHub, format link raw:
-
-```
-https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/installer.sh
-```
+* Auto JWT Secret
+* NATVPS Ready
+* Preset Recovery Database from GitHub
+* Multi Instance Build
+* Menu Command `genieacs-menu`
 
