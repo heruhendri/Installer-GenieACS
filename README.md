@@ -141,15 +141,15 @@ Q --> R
 flowchart LR
 
 subgraph A["GenieACS Instance"]
-    UI[UI Service]
-    CWMP[CWMP Service]
-    NBI[NBI Service]
-    FS[File Server]
+    UI["UI Service"]
+    CWMP["CWMP Service"]
+    NBI["NBI Service"]
+    FS["File Server"]
 end
 
-A --> DB[(MongoDB Database)]
-A --> LOG[/var/log/genieacs-INSTANCE_NAME/]
-A --> CFG[/opt/genieacs-INSTANCE_NAME/genieacs.env]
+A --> DB["MongoDB Database"]
+A --> LOG["Log Directory (var/log/genieacs-INSTANCE_NAME)"]
+A --> CFG["Config File (opt/genieacs-INSTANCE_NAME/genieacs.env)"]
 
 ```
 
