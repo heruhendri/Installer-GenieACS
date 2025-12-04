@@ -1,0 +1,34 @@
+name: CI — Install & Test GenieACS Installer
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  install-genieacs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js (jika diperlukan oleh installer)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (installer script)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget curl git
+          chmod +x ./install-genieacs.sh
+          sudo ./install-genieacs.sh --dry-run
+
+      - name: Lint / Shellcheck (opsional)
+        uses: ludeeus/action-shellcheck@v1
+
+      - name: Validate installation result
+        run: |
+          # contoh: cek apakah folder /opt/genieacs exists
+          test -d /opt/genieacs || (echo "Installation failed" && exit 1)
