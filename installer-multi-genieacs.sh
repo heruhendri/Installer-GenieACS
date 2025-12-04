@@ -330,6 +330,7 @@ ln -sf /usr/local/bin/genieacs-menu /usr/local/bin/genieacs
 # ---------------------------------------------------------------------
 IP=$(hostname -I | awk '{print $1}')
 
+
 echo ""
 echo "============================================================"
 echo -e " 🎉 INSTALASI GENIEACS INSTANCE: ${GREEN}$INSTANCE_NAME${NC} BERHASIL"
@@ -348,3 +349,15 @@ echo " Start : systemctl start genieacs-${INSTANCE_NAME}-*"
 echo " Restart: systemctl restart genieacs-${INSTANCE_NAME}-*" 
 echo " Status : systemctl status genieacs-${INSTANCE_NAME}-*" 
 echo "============================================================"
+
+echo ""
+read -p "Apakah Anda ingin menghapus file installer ini? (y/n): " HAPUS
+
+if [[ "$HAPUS" == "y" ]]; then
+    SCRIPT_PATH="$(realpath "$0")"
+    echo "Menghapus file installer: $SCRIPT_PATH"
+    rm -f "$SCRIPT_PATH"
+    echo "Installer berhasil dihapus."
+else
+    echo "Installer tidak dihapus."
+fi
