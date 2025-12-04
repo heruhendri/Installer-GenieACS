@@ -99,7 +99,7 @@ Service:
 
 ---
 
-# 🧭 Flowchart Instalasi Multi Instance
+# 🧭 Instalasi Multi Instance
 
 ```mermaid
 flowchart TD
@@ -111,7 +111,7 @@ B -->|Yes| D[Continue]
 D --> E[Input Instance Name & Ports]
 E --> F{Instance Exists?}
 F -->|Yes| X[Error: Instance Already Exists]
-F -->|No| G[Generate Directory /opt/genieacs-<instance>]
+F -->|No| G[Create Directory /opt/genieacs-[INSTANCE]]
 
 G --> H[Create Environment File]
 H --> I[Build systemd Services per Component]
@@ -130,11 +130,12 @@ P -->|Yes| Q[rm *.sh]
 P -->|No| R[Finish]
 
 Q --> R
+
 ```
 
 ---
 
-# 🏗 Arsitektur Sistem
+# 🏗 Arsitektur Sistem GenieACS
 
 ```mermaid
 flowchart LR
@@ -146,9 +147,10 @@ subgraph A["GenieACS Instance"]
     FS[File Server]
 end
 
-A --> DB[(MongoDB)]
-A --> LOG[/var/log/genieacs-<instance>/]
-A --> CFG[/opt/genieacs-<instance>/genieacs.env]
+A --> DB[(MongoDB Database)]
+A --> LOG[/var/log/genieacs-[INSTANCE]/]
+A --> CFG[/opt/genieacs-[INSTANCE]/genieacs.env]
+
 ```
 
 ---
