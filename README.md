@@ -1,29 +1,38 @@
 
-# 🚀 Installer GenieACS untuk NATVPS / VPS Ubuntu 22.04
+<p align="center">
+  <img src="https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/logo.png" width="180" />
+</p>
 
-Repository ini berisi **dua installer lengkap** untuk GenieACS:
+<h1 align="center">🚀 Installer GenieACS — NATVPS / Multi Instance / Auto Restore DB</h1>
 
-### ✅ Installer 1  
-Instalasi standar (single instance) — cocok untuk 1 server GenieACS.
+<p align="center">
+  <b>Full Installer • Multi Client Support • Auto Recovery DB • Menu CLI</b>
+</p>
 
-### ✅ Installer 2  
-Mendukung **multi-instance GenieACS** pada satu VPS (client1, client2, dst).  
-Setiap instance punya:
-- Port berbeda  
-- Database MongoDB berbeda  
-- Folder isolasi berbeda  
-- Service systemd berbeda  
+<p align="center">
+  <!-- Shields / Badges -->
+  <img src="https://img.shields.io/badge/Ubuntu-22.04-orange?logo=ubuntu" />
+  <img src="https://img.shields.io/badge/GenieACS-1.2+-blue?logo=genie" />
+  <img src="https://img.shields.io/badge/Multi%20Instance-Supported-success" />
+  <img src="https://img.shields.io/badge/License-MIT-green" />
+  <img src="https://img.shields.io/github/stars/heruhendri/Installer-GenieACS?style=social" />
+</p>
 
 ---
 
-## 📸 Screenshot Dashboard
-![Screnshoot Dashboard](https://github.com/heruhendri/Installer-GenieACS/blob/main/ss.png)
+# 🎥 Demo Video
+
+> Klik untuk melihat proses instalasi lengkap
+
+[![Demo Video](https://img.youtube.com/vi/9h2hS8cYb2k/0.jpg)](https://www.youtube.com/watch?v=9h2hS8cYb2k)
 
 ---
 
-# ⚡ 1. Cara Instalasi
+# 📦 Installer Tersedia
 
-## **Installer 1 (Single Instance – Port Default 3000)**
+### **🟢 Installer 1 — Single Instance**
+
+Instalasi default GenieACS (UI port 3000)
 
 ```bash
 wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs.sh
@@ -33,7 +42,9 @@ chmod +x install-genieacs.sh
 
 ---
 
-## **Installer 2 (Multi Instance — Client1, Client2, dst.)**
+### **🔵 Installer 2 — Multi Instance (client1, client2, dst.)**
+
+Mendukung banyak client pada satu server (isolasi penuh)
 
 ```bash
 wget https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/tambah-menu/installer-multi-genieacs.sh
@@ -43,134 +54,141 @@ chmod +x installer-multi-genieacs.sh
 
 ---
 
-# 🧩 2. Perbedaan Installer 1 & 2
+# 🧩 Perbedaan Installer
 
-| Fitur                             | Installer 1 | Installer 2 |
-| --------------------------------- | ----------- | ----------- |
-| Single Instance                   | ✅           | ❌           |
-| Multi Instance (client1, client2) | ❌           | ✅           |
-| Database terpisah                 | ❌           | ✅           |
-| Port per instance                 | ❌           | ✅           |
-| Service systemd unik              | ❌           | ✅           |
-| Restore preset DB dari GitHub     | ❌           | ✅           |
-| Menu CLI (genieacs-menu)          | ❌           | ✅           |
+| Fitur                       | Installer 1 | Installer 2 |
+| --------------------------- | ----------- | ----------- |
+| Single Instance             | ✅           | ❌           |
+| Multi Instance              | ❌           | ✅           |
+| Database Per Instance       | ❌           | ✅           |
+| Port Unik Per Client        | ❌           | ✅           |
+| Auto Restore DB dari GitHub | ❌           | ✅           |
+| Menu CLI `genieacs-menu`    | ❌           | ✅           |
+| NATVPS Support              | ⚠️          | ✅           |
+| Auto Service Builder        | ⚠️          | ✅           |
 
 ---
 
-# 🧱 3. Struktur Folder Instansi (Installer 2)
-
-Setiap instance memiliki direktori tersendiri:
+# 🧱 Struktur Folder Multi Instance
 
 ```
 /opt/genieacs-<instance>/
 │── genieacs.env
 │── ext/
-│
 /var/log/genieacs-<instance>/
-│── cwmp.log
-│── ui.log
-│── fs.log
-│── nbi.log
-```
-
-Contoh untuk instance `client1`:
-
-```
-/opt/genieacs-client1/
-/var/log/genieacs-client1/
-Database: genieacs-client1
+│── ui.log, fs.log, nbi.log, cwmp.log
+MongoDB:
+  genieacs-<instance>
 Service:
-  - genieacs-client1-cwmp
-  - genieacs-client1-ui
-  - genieacs-client1-nbi
-  - genieacs-client1-fs
+  genieacs-<instance>-ui
+  genieacs-<instance>-nbi
+  genieacs-<instance>-fs
+  genieacs-<instance>-cwmp
 ```
 
 ---
 
-# 🏗 **4. Flowchart Arsitektur Installer Multi-Instance**
+# 🔧 Port Default
 
-GitHub otomatis merender diagram berikut:
+| Port | Fungsi      |
+| ---- | ----------- |
+| 3000 | GenieACS UI |
+| 7547 | CWMP        |
+| 7557 | NBI         |
+| 7567 | File Server |
+
+---
+
+# 🧭 Flowchart Instalasi Multi Instance
 
 ```mermaid
 flowchart TD
 
-A[Start Installer] --> B{Dependencies Sudah Terinstal?}
-B -->|Belum| C[Install NodeJS, MongoDB, GenieACS Core]
-B -->|Sudah| D[Lanjut]
+A[Start Installer] --> B{Dependencies Installed?}
+B -->|No| C[Install NodeJS, MongoDB, Core Packages]
+B -->|Yes| D[Continue]
 
-D --> E[Input Nama Instance & Port]
-E --> F{Folder Instance Sudah Ada?}
-F -->|Ya| X[Error: Instance Sudah Ada → Stop]
-F -->|Tidak| G[Buat Direktori Instance]
+D --> E[Input Instance Name & Ports]
+E --> F{Instance Exists?}
+F -->|Yes| X[Error: Instance Already Exists]
+F -->|No| G[Generate Directory /opt/genieacs-<instance>]
 
-G --> H[Buat File Environment (.env)]
-H --> I[Buat Service Systemd (cwmp/ui/fs/nbi)]
+G --> H[Create Environment File]
+H --> I[Build systemd Services per Component]
 
-I --> J[Reload dan Start Service]
-J --> K{Install Preset DB GitHub?}
-K -->|Ya| L[Download Folder db dari GitHub → mongorestore]
-K -->|Tidak| M[Lewati]
+I --> J[Start & Enable Services]
+J --> K{Restore DB from GitHub?}
+K -->|Yes| L[Fetch DB → mongorestore]
+K -->|No| M[Skip]
 
-L --> N[Start ulang service instance]
+L --> N[Restart Services]
 M --> N
 
 N --> O[Install genieacs-menu CLI]
-O --> P{Hapus Installer?}
-P -->|Ya| Q[rm installer.sh]
-P -->|Tidak| R[Selesai]
+O --> P{Delete Installer Script?}
+P -->|Yes| Q[rm *.sh]
+P -->|No| R[Finish]
 
 Q --> R
 ```
 
 ---
 
-# 🗃 5. Arsitektur Sistem (High Level)
+# 🏗 Arsitektur Sistem
 
 ```mermaid
 flowchart LR
 
-subgraph INSTANCE["Instance GenieACS"]
-    A1[genieacs-cwmp] 
-    A2[genieacs-ui]
-    A3[genieacs-nbi]
-    A4[genieacs-fs]
+subgraph A["GenieACS Instance"]
+    UI[UI Service]
+    CWMP[CWMP Service]
+    NBI[NBI Service]
+    FS[File Server]
 end
 
-INSTANCE --> DB[(MongoDB: genieacs-<instance>)]
-INSTANCE --> LOG[/var/log/genieacs-<instance>/]
-INSTANCE --> CFG[/opt/genieacs-<instance>/genieacs.env]
+A --> DB[(MongoDB)]
+A --> LOG[/var/log/genieacs-<instance>/]
+A --> CFG[/opt/genieacs-<instance>/genieacs.env]
 ```
 
 ---
 
-# 🌐 6. Port Default
+# 🛠 Menu CLI — `genieacs-menu`
 
-| Komponen | Port |
-| -------- | ---- |
-| CWMP     | 7547 |
-| NBI      | 7557 |
-| FS       | 7567 |
-| UI       | 3000 |
-
-Untuk NAT VPS:
+Setelah instalasi, cukup jalankan:
 
 ```
-3000 → Public Port NAT
-7547 → TR-069 WAN management
+genieacs-menu
+```
+
+Menu meliputi:
+
+* Start/Stop/Restart Semua Service
+* Reset Database (Auto download DB default dari GitHub)
+* Ganti Port Instance
+* Cek Log Realtime
+* Backup Database
+* Tambah Instance Baru
+
+---
+
+# 🗃 Restore Database Default
+
+Installer otomatis mengambil DB preset dari:
+
+```
+https://github.com/heruhendri/Installer-GenieACS/tree/tambah-menu/db
+```
+
+Perintah manual:
+
+```bash
+genieacs-menu → Reset Database
 ```
 
 ---
 
-# 🔧 7. Akses UI
-
-```
-http://IP-VPS:3000
-```
-
----
-
-# 🗑 8. Uninstall Semua Instance
+# 🗑 Uninstall Semua Instance
 
 ```bash
 systemctl stop genieacs-* 
@@ -183,19 +201,43 @@ systemctl daemon-reload
 
 ---
 
-# ⭐ 9. Raw Link Installer
+# 📜 Changelog
 
-```
-https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/install-genieacs.sh
-```
+## **v2.5 — 2025**
+
+* Menambahkan auto-restore DB via GitHub
+* Menu CLI lengkap (`genieacs-menu`)
+* Auto service builder
+* Support total multi instance tanpa batas
+* Perbaikan struktur folder
+* Perbaikan auto-start service setelah reset DB
+* Compatible NATVPS
+
+## **v2.1 — 2024**
+
+* Multi instance awal
+* Port custom
+* Database per instance
+
+## **v1.0 — 2023**
+
+* Installer single instance
 
 ---
 
-# ✨ 10. Fitur Tambahan
+# 📄 License
 
-* Auto JWT Secret
-* NATVPS Ready
-* Preset Recovery Database from GitHub
-* Multi Instance Build
-* Menu Command `genieacs-menu`
+MIT License (free to use & modify)
+
+---
+
+# 💬 Support
+
+Telegram: **@GbtTapiPngnSndiri**
+
+---
+
+<p align="center">
+  ⭐ Jika project ini membantu, silakan beri bintang di GitHub!
+</p>
 
