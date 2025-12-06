@@ -179,7 +179,7 @@ Menu meliputi:
 Installer otomatis mengambil DB preset dari:
 
 ```
-https://github.com/heruhendri/Installer-GenieACS/tree/tambah-menu/db
+https://github.com/heruhendri/Installer-GenieACS/tree/main/db
 ```
 
 Perintah manual:
@@ -229,7 +229,7 @@ systemctl daemon-reload
 
 # 📄 License
 
-MIT License (free to use & modify)
+MIT License 
 
 ---
 
