@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/logo.png" width="180" />
+  <img src="https://raw.githubusercontent.com/heruhendri/Installer-GenieACS/main/ss.png" width="180" />
 </p>
 
 <h1 align="center">🚀 Installer GenieACS — NATVPS / Multi Instance / Auto Restore DB</h1>
